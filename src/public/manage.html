@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meu Agendamento — Luan Barber</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="brand">
+        <div class="brand-mark">LB</div>
+        <div>
+          <span class="brand-title">Luan Barber</span>
+          <span class="brand-subtitle">Gerenciamento do Agendamento</span>
+        </div>
+      </div>
+      <div>
+        <a href="/" class="btn btn-sm btn-outline">Novo Agendamento</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top: 24px; padding-bottom: 60px;">
+    <div id="manage-error-box" class="alert alert-red hidden"></div>
+
+    <div id="manage-content-box" class="hidden">
+      <!-- CARTÃO DE DETALHES DO AGENDAMENTO -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h1 class="card-title" style="font-size: 1.2rem;">Detalhes do Seu Agendamento</h1>
+            <p class="card-subtitle">Link exclusivo de consulta e gerenciamento.</p>
+          </div>
+          <div id="manage-status-badge"></div>
+        </div>
+
+        <div id="manage-details-list" style="display: grid; gap: 10px; font-size: 0.95rem;"></div>
+
+        <!-- Alerta de bloqueio com menos de 2 horas -->
+        <div id="manage-2h-warning" class="alert alert-yellow hidden" style="margin-top: 16px; margin-bottom: 0;">
+          Para alterações ou cancelamentos com menos de 2 horas de antecedência, entre em contato diretamente com a barbearia.
+        </div>
+
+        <!-- Botões de Ação (Alterar / Cancelar) -->
+        <div id="manage-actions-bar" class="flex-between" style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-gray);">
+          <button type="button" id="btn-toggle-reschedule" class="btn btn-white">
+            Alterar Agendamento
+          </button>
+          <button type="button" id="btn-cancel-my-appointment" class="btn btn-red">
+            Cancelar Agendamento
+          </button>
+        </div>
+      </div>
+
+      <!-- SEÇÃO DE ALTERAÇÃO (REMARCAÇÃO / SERVIÇOS) -->
+      <div id="reschedule-panel" class="card hidden">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Alterar Horário ou Serviços</h2>
+            <p class="card-subtitle">Escolha os serviços, a nova data e um horário disponível.</p>
+          </div>
+          <button type="button" id="btn-close-reschedule" class="btn btn-sm btn-outline">Fechar</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Serviços</label>
+          <div id="reschedule-services-list" class="service-grid"></div>
+        </div>
+
+        <div class="form-group">
+          <div class="flex-between" style="margin-bottom: 8px;">
+            <label class="form-label" style="margin-bottom: 0;">Escolha o Dia e Horário</label>
+            <div class="flex-gap">
+              <button type="button" id="resched-prev-week" class="btn btn-sm btn-outline">← Semana</button>
+              <button type="button" id="resched-next-week" class="btn btn-sm btn-outline">Semana →</button>
+            </div>
+          </div>
+          <div id="reschedule-days-strip" class="days-strip" style="margin-bottom: 12px;"></div>
+          <div id="reschedule-slots-grid"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btn-save-reschedule" class="btn btn-green">
+            Salvar Alteração
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api-client.js"></script>
+  <script src="/js/ui-helpers.js"></script>
+  <script src="/js/client-manage.js"></script>
+</body>
+</html>

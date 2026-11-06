@@ -1,0 +1,14 @@
+{
+  "name": "luan-barber",
+  "version": "1.0.0",
+  "description": "Luan Barber — Sistema Completo de Agendamento e Gestão de Barbearia",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "start:local": "agy-node src/server.js",
+    "test": "node --test tests/system.test.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

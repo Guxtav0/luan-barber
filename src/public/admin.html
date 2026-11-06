@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel Administrativo — Luan Barber</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <!-- TELA DE LOGIN -->
+  <div id="admin-login-screen" class="container" style="padding-top: 64px; max-width: 420px;">
+    <div class="card">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <div class="brand-mark" style="margin: 0 auto 12px auto; width: 48px; height: 48px; font-size: 1.3rem;">LB</div>
+        <h1 class="brand-title" style="font-size: 1.35rem;">LUAN BARBER</h1>
+        <p class="text-muted">Acesso exclusivo administrativo</p>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="login-email">E-mail</label>
+          <input
+            type="email"
+            id="login-email"
+            class="form-control"
+            placeholder="luan@luanbarber.com.br"
+            required
+            autocomplete="username"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Senha</label>
+          <input
+            type="password"
+            id="login-password"
+            class="form-control"
+            placeholder="••••••••"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+        <div id="login-error" class="alert alert-red hidden"></div>
+        <button type="submit" id="login-submit-btn" class="btn btn-white btn-block" style="margin-top: 8px;">
+          Entrar no Painel
+        </button>
+      </form>
+
+      <hr class="divider" />
+      <div style="text-align: center;">
+        <a href="/" class="text-muted" style="text-decoration: underline;">Ir para a página pública de agendamento</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAINEL PRINCIPAL AUTENTICADO -->
+  <div id="admin-app-screen" class="hidden">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <div class="brand">
+          <div class="brand-mark">LB</div>
+          <div>
+            <span class="brand-title">Luan Barber</span>
+            <span class="brand-subtitle">Gestão e Administração</span>
+          </div>
+        </div>
+
+        <div class="flex-gap">
+          <button type="button" id="btn-open-notifications" class="btn btn-sm btn-outline" title="Status e Histórico de Notificações WhatsApp">
+            <span>WhatsApp:</span>
+            <span id="wa-status-indicator" class="badge">Verificando...</span>
+          </button>
+          <a href="/" target="_blank" class="btn btn-sm btn-outline">Ver Página Pública ↗</a>
+          <button type="button" id="btn-logout" class="btn btn-sm btn-red">Sair</button>
+        </div>
+      </div>
+
+      <!-- 3 ABAS PRINCIPAIS: AGENDA | FINANCEIRO | PREÇOS -->
+      <nav class="admin-tabs" aria-label="Navegação Principal">
+        <div class="admin-tabs-inner">
+          <button type="button" class="admin-tab-btn active" data-tab="agenda">Agenda</button>
+          <button type="button" class="admin-tab-btn" data-tab="financeiro">Financeiro</button>
+          <button type="button" class="admin-tab-btn" data-tab="precos">Preços</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="container-wide" style="padding-top: 20px; padding-bottom: 60px;">
+      <!-- ================================================================== -->
+      <!-- ABA 1 — AGENDA                                                     -->
+      <!-- ================================================================== -->
+      <section id="tab-agenda" class="admin-tab-panel">
+        <!-- Barra de Seleção de Semana -->
+        <div class="card">
+          <div class="flex-between">
+            <div>
+              <div class="flex-gap">
+                <h2 class="section-title" style="margin-bottom: 0;">Programação e Agenda Semanal</h2>
+                <span id="week-status-badge" class="badge badge-yellow">Rascunho</span>
+              </div>
+              <p id="week-range-label" class="text-muted" style="margin-top: 4px;">Carregando semana...</p>
+            </div>
+
+            <div class="flex-gap">
+              <button type="button" id="btn-prev-week" class="btn btn-sm btn-outline">← Semana anterior</button>
+              <button type="button" id="btn-current-week" class="btn btn-sm btn-outline">Semana atual</button>
+              <button type="button" id="btn-next-week" class="btn btn-sm btn-outline">Próxima semana →</button>
+              <input type="date" id="week-date-picker" class="form-control" style="width: auto; padding: 6px 10px;" title="Ir para semana de uma data específica" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Alerta de Conflito de Expediente (Regra 14) -->
+        <div id="schedule-conflict-alert" class="alert alert-red hidden">
+          <h4 style="font-weight: 700; margin-bottom: 6px;">Atenção: Conflito com agendamentos já confirmados!</h4>
+          <p style="margin-bottom: 10px;">
+            Não é permitido remover ou reduzir horários de expediente que prejudiquem agendamentos já confirmados. Resolva (remaneje ou cancele) os agendamentos abaixo antes de salvar esta alteração:
+          </p>
+          <div id="schedule-conflict-list"></div>
+        </div>
+
+        <!-- 3.1 Gerenciamento da Disponibilidade Semanal -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">1. Configurar Disponibilidade da Semana</h3>
+              <p class="card-subtitle">
+                Defina os dias de trabalho, expediente e intervalos. Os horários só ficam visíveis aos clientes após clicar em "Publicar agenda".
+              </p>
+            </div>
+            <button type="button" id="btn-toggle-schedule-editor" class="btn btn-sm btn-outline">
+              Ocultar / Expandir Expediente
+            </button>
+          </div>
+
+          <div id="schedule-editor-body">
+            <div id="schedule-days-container"></div>
+
+            <div class="flex-between" style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-gray);">
+              <span class="text-muted" id="schedule-published-info"></span>
+              <div class="flex-gap">
+                <button type="button" id="btn-save-draft" class="btn btn-outline">
+                  Salvar como rascunho
+                </button>
+                <button type="button" id="btn-publish-schedule" class="btn btn-green">
+                  Publicar agenda
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3.3 Gerenciamento dos Agendamentos -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">2. Agendamentos da Semana</h3>
+              <p class="card-subtitle">
+                Gerencie horários, serviços, status de conclusão e pagamentos em calendário ou lista.
+              </p>
+            </div>
+            <div class="flex-gap">
+              <div class="flex-gap" style="background: var(--bg-black); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border-gray);">
+                <button type="button" id="view-mode-list" class="btn btn-sm btn-white">Lista</button>
+                <button type="button" id="view-mode-calendar" class="btn btn-sm btn-outline" style="border:none;">Calendário</button>
+              </div>
+              <button type="button" id="btn-new-manual-appointment" class="btn btn-sm btn-green">
+                + Novo Agendamento
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtros rápidos da Agenda -->
+          <div class="flex-between" style="margin-bottom: 14px;">
+            <div class="flex-gap">
+              <select id="agenda-filter-day" class="form-control" style="width: auto; padding: 7px 10px;">
+                <option value="">Todos os dias da semana</option>
+              </select>
+              <select id="agenda-filter-status" class="form-control" style="width: auto; padding: 7px 10px;">
+                <option value="">Todos os status</option>
+                <option value="confirmado">Confirmados</option>
+                <option value="concluido">Concluídos</option>
+                <option value="cancelado">Cancelados</option>
+              </select>
+            </div>
+            <div id="agenda-summary-counts" class="text-muted"></div>
+          </div>
+
+          <!-- Visualização em Lista -->
+          <div id="appointments-list-view"></div>
+
+          <!-- Visualização em Calendário -->
+          <div id="appointments-calendar-view" class="hidden"></div>
+        </div>
+
+        <!-- Seção 6 — Lista de Espera -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="flex-gap">
+                <h3 class="card-title">3. Lista de Espera</h3>
+                <span id="waitlist-count-badge" class="badge">0 aguardando</span>
+              </div>
+              <p class="card-subtitle">
+                Clientes aguardando vaga. Quando um agendamento é cancelado, oportunidades compatíveis são destacadas automaticamente.
+              </p>
+            </div>
+            <select id="waitlist-filter-status" class="form-control" style="width: auto; padding: 7px 10px;">
+              <option value="aguardando">Aguardando</option>
+              <option value="atendido">Atendidos</option>
+              <option value="">Todos</option>
+            </select>
+          </div>
+
+          <div id="waitlist-container"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- ABA 2 — FINANCEIRO                                                 -->
+      <!-- ================================================================== -->
+      <section id="tab-financeiro" class="admin-tab-panel hidden">
+        <!-- 3.5 Filtros de Período -->
+        <div class="card">
+          <div class="flex-between">
+            <div>
+              <h2 class="section-title" style="margin-bottom: 2px;">Controle Financeiro</h2>
+              <p id="finance-period-label" class="text-muted">Período selecionado</p>
+            </div>
+
+            <div class="flex-gap" id="finance-period-buttons">
+              <button type="button" class="btn btn-sm btn-outline" data-period="hoje">Hoje</button>
+              <button type="button" class="btn btn-sm btn-outline" data-period="7dias">Últimos 7 dias</button>
+              <button type="button" class="btn btn-sm btn-outline" data-period="30dias">Últimos 30 dias</button>
+              <button type="button" class="btn btn-sm btn-white" data-period="este_mes">Este mês</button>
+              <button type="button" class="btn btn-sm btn-outline" data-period="mes_anterior">Mês anterior</button>
+              <button type="button" class="btn btn-sm btn-outline" data-period="personalizado">Personalizado</button>
+            </div>
+          </div>
+
+          <!-- Datas personalizadas -->
+          <div id="finance-custom-dates" class="hidden" style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-gray);">
+            <div class="flex-gap">
+              <div>
+                <label class="form-label" for="finance-start-date">Data inicial</label>
+                <input type="date" id="finance-start-date" class="form-control" />
+              </div>
+              <div>
+                <label class="form-label" for="finance-end-date">Data final</label>
+                <input type="date" id="finance-end-date" class="form-control" />
+              </div>
+              <div style="align-self: flex-end;">
+                <button type="button" id="btn-apply-custom-finance" class="btn btn-white">Filtrar período</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3.4 Cards Principais -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Faturamento Recebido</div>
+            <div class="kpi-value" id="kpi-recebido" style="color: var(--green-text);">R$ 0,00</div>
+            <div class="kpi-note">Soma dos atendimentos pagos</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Faturamento Pendente</div>
+            <div class="kpi-value" id="kpi-pendente" style="color: var(--yellow-text);">R$ 0,00</div>
+            <div class="kpi-note">Atendimentos concluídos e não pagos</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Total de Cortes Realizados</div>
+            <div class="kpi-value" id="kpi-cortes">0</div>
+            <div class="kpi-note">Atendimentos concluídos no período</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Agendamentos Futuros</div>
+            <div class="kpi-value" id="kpi-futuros" style="color: var(--blue-text);">0</div>
+            <div class="kpi-note">Atendimentos ainda não realizados</div>
+          </div>
+        </div>
+
+        <div class="form-row" style="align-items: start;">
+          <!-- 3.6 Controle de Inadimplência ("Pagamentos pendentes") -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Pagamentos pendentes</h3>
+                <p class="card-subtitle">Atendimentos já concluídos aguardando confirmação de pagamento.</p>
+              </div>
+              <span id="pending-payments-badge" class="badge badge-yellow">0</span>
+            </div>
+            <div id="pending-payments-container"></div>
+          </div>
+
+          <!-- 3.7 Ranking de Clientes ("Clientes que mais cortam") -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Clientes que mais cortam</h3>
+                <p class="card-subtitle">Ranking por atendimentos concluídos e recorrência.</p>
+              </div>
+            </div>
+            <div id="top-clients-container"></div>
+          </div>
+        </div>
+
+        <!-- 3.8 Histórico Financeiro -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Histórico financeiro</h3>
+              <p class="card-subtitle">Listagem completa de atendimentos no período.</p>
+            </div>
+            <div class="flex-gap">
+              <input
+                type="text"
+                id="finance-search-input"
+                class="form-control"
+                placeholder="Buscar cliente ou serviço..."
+                style="width: 210px; padding: 7px 10px;"
+              />
+              <select id="finance-status-filter" class="form-control" style="width: auto; padding: 7px 10px;">
+                <option value="">Todos atendimentos</option>
+                <option value="concluido">Concluídos</option>
+                <option value="confirmado">Confirmados</option>
+                <option value="cancelado">Cancelados</option>
+              </select>
+              <select id="finance-payment-filter" class="form-control" style="width: auto; padding: 7px 10px;">
+                <option value="">Todos pagamentos</option>
+                <option value="pago">Pagos</option>
+                <option value="pendente">Pendentes</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="finance-history-container"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- ABA 3 — PREÇOS                                                     -->
+      <!-- ================================================================== -->
+      <section id="tab-precos" class="admin-tab-panel hidden">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="section-title" style="margin-bottom: 2px;">Tabela de Preços e Serviços</h2>
+              <p class="card-subtitle">
+                Cada serviço possui duração fixa de 30 minutos. Se o cliente selecionar 2 serviços, o sistema reserva 60 minutos consecutivos.
+              </p>
+            </div>
+            <button type="button" id="btn-add-service" class="btn btn-green">
+              + Adicionar Serviço
+            </button>
+          </div>
+
+          <div id="admin-services-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL GENÉRICO PARA EDIÇÃO DE AGENDAMENTO / SERVIÇOS / NOTIFICAÇÕES -->
+  <div id="admin-modal-root"></div>
+
+  <script src="/js/api-client.js"></script>
+  <script src="/js/ui-helpers.js"></script>
+  <script src="/js/admin-panel.js"></script>
+</body>
+</html>

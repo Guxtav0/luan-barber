@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Luan Barber — Agendamento Online</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="brand">
+        <div class="brand-mark">LB</div>
+        <div>
+          <span class="brand-title">Luan Barber</span>
+          <span class="brand-subtitle">Agendamento Online</span>
+        </div>
+      </div>
+      <div>
+        <a href="/admin" class="btn btn-sm btn-outline">Área do Barbeiro</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top: 20px; padding-bottom: 80px;">
+    <!-- SELETOR DE SEMANA -->
+    <div class="card">
+      <div class="flex-between">
+        <div>
+          <div style="font-size: 0.78rem; color: var(--text-gray); text-transform: uppercase; font-weight: 700;">
+            Semana Selecionada
+          </div>
+          <div id="public-week-label" style="font-weight: 700; font-size: 1.05rem; margin-top: 2px;">
+            Carregando...
+          </div>
+        </div>
+        <div class="flex-gap">
+          <button type="button" id="pub-prev-week" class="btn btn-sm btn-outline">← Anterior</button>
+          <button type="button" id="pub-curr-week" class="btn btn-sm btn-outline">Atual</button>
+          <button type="button" id="pub-next-week" class="btn btn-sm btn-outline">Próxima →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SITUAÇÃO 1: AGENDA NÃO PUBLICADA -->
+    <div id="situation-unpublished" class="card hidden" style="text-align: center; padding: 36px 20px;">
+      <span class="badge badge-yellow" style="margin-bottom: 12px;">Agenda em preparação</span>
+      <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;">
+        Aguarde a confirmação dos dias e horários disponíveis.
+      </h2>
+      <p class="text-muted">
+        O Luan ainda está definindo os horários de atendimento desta semana. Volte em breve ou consulte outra semana.
+      </p>
+    </div>
+
+    <!-- SITUAÇÃO 3: AGENDA SEMANAL FECHADA (TODOS OS HORÁRIOS OCUPADOS) -->
+    <div id="situation-closed" class="card hidden" style="text-align: center; padding: 32px 20px;">
+      <span class="badge badge-red" style="margin-bottom: 12px;">Sem vagas disponíveis</span>
+      <h2 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 8px;">
+        Agenda semanal fechada.
+      </h2>
+      <p class="text-muted" style="margin-bottom: 18px;">
+        Todos os horários publicados para esta semana já foram preenchidos. Caso deseje, entre na lista de espera e avisaremos se surgir uma vaga!
+      </p>
+      <button type="button" id="btn-open-waitlist-closed" class="btn btn-white">
+        Entrar na Lista de Espera
+      </button>
+    </div>
+
+    <!-- SITUAÇÃO 2: FLUXO DE AGENDAMENTO (QUANDO AGENDA PUBLICADA) -->
+    <div id="situation-booking-flow" class="hidden">
+      <!-- PASSO 1: IDENTIFICAÇÃO -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">1. Seus Dados</h2>
+            <p class="card-subtitle">Informe seu nome para identificar seu agendamento (WhatsApp é opcional).</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="client-name">Nome completo *</label>
+            <input type="text" id="client-name" class="form-control" placeholder="Ex: João Silva" />
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="client-phone">Número de WhatsApp (opcional)</label>
+            <input type="tel" id="client-phone" class="form-control" placeholder="(11) 99999-9999 (opcional)" />
+          </div>
+        </div>
+      </div>
+
+      <!-- PASSO 2: SELEÇÃO DE SERVIÇOS -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">2. Escolha os Serviços</h2>
+            <p class="card-subtitle">Clique em um ou mais serviços abaixo. Cada serviço ocupa 30 minutos.</p>
+          </div>
+          <div id="services-totals-badge" class="badge">Nenhum selecionado</div>
+        </div>
+
+        <div id="public-services-list" class="service-grid"></div>
+      </div>
+
+      <!-- PASSO 3: ESCOLHA DO DIA E HORÁRIO -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">3. Escolha o Dia e Horário</h2>
+            <p class="card-subtitle" id="slot-duration-hint">
+              Selecione o dia e o horário de início do seu atendimento.
+            </p>
+          </div>
+        </div>
+
+        <!-- Dias da Semana -->
+        <div id="public-days-strip" class="days-strip" style="margin-bottom: 16px;"></div>
+
+        <!-- Horários Disponíveis do Dia Selecionado -->
+        <div id="public-slots-container"></div>
+
+        <!-- Opção de Lista de Espera -->
+        <div id="no-compatible-slots-box" class="alert alert-yellow" style="margin-top: 14px; margin-bottom: 0;">
+          <div class="flex-between">
+            <div>
+              <strong>Não encontrou um horário compatível com sua necessidade?</strong>
+              <div style="font-size: 0.84rem; margin-top: 2px;">
+                Entre na lista de espera caso deseje ser avisado quando abrir uma vaga.
+              </div>
+            </div>
+            <button type="button" id="btn-open-waitlist-inline" class="btn btn-sm btn-white">
+              Entrar na Lista de Espera
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PASSO 4: RESUMO E CONFIRMAÇÃO DO AGENDAMENTO (SEMPRE VISÍVEL) -->
+      <div id="booking-summary-card" class="card" style="border-color: var(--text-white);">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">4. Resumo e Confirmação</h2>
+            <p class="card-subtitle">Confira os dados abaixo e clique em Confirmar agendamento.</p>
+          </div>
+        </div>
+
+        <div id="booking-summary-details" style="display: grid; gap: 8px; font-size: 0.95rem; margin-bottom: 18px;"></div>
+
+        <button type="button" id="btn-confirm-booking" class="btn btn-green btn-block" style="padding: 14px; font-size: 1rem;">
+          Confirmar agendamento
+        </button>
+      </div>
+    </div>
+
+    <!-- TELA DE SUCESSO APÓS CONFIRMAR AGENDAMENTO -->
+    <div id="booking-success-card" class="card hidden" style="border-color: var(--green-action); text-align: center; padding: 28px 20px;">
+      <span class="badge badge-green" style="margin-bottom: 12px; font-size: 0.85rem;">Confirmado</span>
+      <h2 style="font-size: 1.35rem; font-weight: 800; margin-bottom: 10px;">
+        Agendamento realizado com sucesso! Esperamos você na Luan Barber.
+      </h2>
+      <p class="text-muted" style="margin-bottom: 18px;">
+        Seu horário já está reservado. Guarde o seu link individual abaixo para consultar, alterar ou cancelar o agendamento quando precisar:
+      </p>
+
+      <div id="success-appointment-summary" class="alert" style="text-align: left; margin-bottom: 18px;"></div>
+
+      <div class="alert alert-blue" style="text-align: left;">
+        <div style="font-weight: 700; margin-bottom: 6px;">Seu Link Exclusivo de Gerenciamento:</div>
+        <input type="text" id="success-manage-link-input" class="form-control" readonly style="margin-bottom: 10px; font-size: 0.85rem;" />
+        <div class="flex-gap">
+          <button type="button" id="btn-copy-manage-link" class="btn btn-sm btn-white">
+            Copiar Link
+          </button>
+          <a href="#" id="btn-go-manage-link" class="btn btn-sm btn-outline">
+            Acessar Meu Agendamento →
+          </a>
+        </div>
+      </div>
+
+      <button type="button" id="btn-new-booking-reset" class="btn btn-outline" style="margin-top: 12px;">
+        Fazer outro agendamento
+      </button>
+    </div>
+  </main>
+
+  <!-- MODAL DA LISTA DE ESPERA -->
+  <div id="waitlist-modal-root"></div>
+
+  <script src="/js/api-client.js"></script>
+  <script src="/js/ui-helpers.js"></script>
+  <script src="/js/public-booking.js"></script>
+</body>
+</html>

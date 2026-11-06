@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: luan-barber
+    runtime: node
+    plan: free
+    buildCommand: echo "Build pronto"
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: TZ
+        value: America/Sao_Paulo
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: ADMIN_DEFAULT_EMAIL
+        value: luan@luanbarber.com.br
+      - key: ADMIN_DEFAULT_PASSWORD
+        value: LuanBarber@2026
