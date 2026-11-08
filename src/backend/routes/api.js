@@ -31,9 +31,13 @@ const {
   listServices,
   createService,
   updateService,
-  deleteService
+  deleteService,
+  reorderServices
 } = require('../services/service-catalog');
 const {
+  DEFAULT_MESSAGE_TEMPLATES,
+  loadSavedSettingsIntoRuntime,
+  setMessageTemplatesSync,
   getWhatsAppIntegrationStatus,
   attemptSendNotification
 } = require('../services/whatsapp-service');
@@ -444,6 +448,15 @@ async function handleApiRequest(req, res) {
         });
       }
 
+      if (pathname === '/api/admin/services/reorder' && method === 'PUT') {
+        const body = await parseJsonBody(req);
+        const services = await reorderServices(body.ordered_ids);
+        return sendJson(res, 200, {
+          message: 'Ordem dos serviços atualizada com sucesso!',
+          services
+        });
+      }
+
       const adminServiceMatch = pathname.match(/^\/api\/admin\/services\/([a-zA-Z0-9-]+)$/);
       if (adminServiceMatch) {
         const serviceId = adminServiceMatch[1];
@@ -496,24 +509,43 @@ async function handleApiRequest(req, res) {
 
       // --- ABA 4: CONFIGURAÇÕES DO ADMINISTRADOR ---
       if (pathname === '/api/admin/settings' && method === 'GET') {
+        const loaded = await loadSavedSettingsIntoRuntime();
         return sendJson(res, 200, {
-          whatsapp: getWhatsAppIntegrationStatus()
+          whatsapp: getWhatsAppIntegrationStatus(),
+          message_templates: loaded.templates,
+          default_templates: DEFAULT_MESSAGE_TEMPLATES
         });
       }
 
       if (pathname === '/api/admin/settings' && method === 'PUT') {
         const body = await parseJsonBody(req);
+        const db = getDb();
+        const patchToSave = {};
+
         if (body.luan_whatsapp_number !== undefined) {
           const digits = String(body.luan_whatsapp_number || '').replace(/\D/g, '');
-          if (digits) {
-            process.env.LUAN_WHATSAPP_NUMBER = digits.startsWith('55') ? digits : `55${digits}`;
-          } else {
-            process.env.LUAN_WHATSAPP_NUMBER = '';
-          }
+          const normalized = digits ? (digits.startsWith('55') ? digits : `55${digits}`) : '';
+          process.env.LUAN_WHATSAPP_NUMBER = normalized;
+          const config = getConfig();
+          config.whatsapp.luanNumber = normalized;
+          patchToSave.luan_whatsapp_number = normalized;
         }
+
+        if (body.message_templates && typeof body.message_templates === 'object') {
+          const updatedTemplates = setMessageTemplatesSync(body.message_templates);
+          patchToSave.message_templates = updatedTemplates;
+        }
+
+        if (typeof db.saveSystemSettings === 'function' && Object.keys(patchToSave).length > 0) {
+          await db.saveSystemSettings(patchToSave);
+        }
+
+        const loaded = await loadSavedSettingsIntoRuntime();
         return sendJson(res, 200, {
           message: 'Configurações salvas com sucesso!',
-          whatsapp: getWhatsAppIntegrationStatus()
+          whatsapp: getWhatsAppIntegrationStatus(),
+          message_templates: loaded.templates,
+          default_templates: DEFAULT_MESSAGE_TEMPLATES
         });
       }
     }

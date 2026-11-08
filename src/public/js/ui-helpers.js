@@ -54,6 +54,10 @@ const UI = {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   },
 
+  formatPhoneDisplay(val) {
+    return this.formatPhoneValue(val);
+  },
+
   attachPhoneMask(inputEl) {
     if (!inputEl) return;
     inputEl.addEventListener('input', (e) => {

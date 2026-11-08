@@ -100,7 +100,99 @@ function setWhatsAppFetchForTest(fn) {
   customFetchImpl = fn;
 }
 
+const DEFAULT_MESSAGE_TEMPLATES = {
+  mensagem_cliente:
+    'Olá {cliente}! Passando para confirmar seu agendamento na Luan Barber no dia {data} às {horario} ({servicos} - {valor}).',
+  novo_agendamento: [
+    'Novo agendamento na Luan Barber!',
+    '',
+    'Cliente: {cliente}',
+    'Telefone: {telefone}',
+    'Serviços: {servicos}',
+    'Data: {data}',
+    'Horário: {horario}',
+    'Valor: {valor}'
+  ].join('\n'),
+  cancelamento_cliente: [
+    'Um cliente desistiu do agendamento.',
+    '',
+    'Cliente: {cliente}',
+    'Data: {data}',
+    'Horário: {horario}',
+    'Serviços: {servicos}',
+    '',
+    'O horário foi liberado na agenda.'
+  ].join('\n'),
+  atendimento_concluido: [
+    'Atendimento finalizado na Luan Barber!',
+    '',
+    'Cliente: {cliente}',
+    'Serviços: {servicos}',
+    'Valor: {valor}'
+  ].join('\n'),
+  publicacao_agenda:
+    'Sua agenda semanal foi publicada com sucesso e já está disponível para os clientes.'
+};
+
+let cachedMessageTemplates = { ...DEFAULT_MESSAGE_TEMPLATES };
+
+function renderMessageTemplate(templateStr, vars = {}) {
+  let result = String(templateStr || '');
+  const map = {
+    '{cliente}': vars.cliente || '',
+    '{telefone}': vars.telefone || 'Não informado',
+    '{servicos}': vars.servicos || '',
+    '{data}': vars.data || '',
+    '{horario}': vars.horario || '',
+    '{valor}': vars.valor || ''
+  };
+  for (const [key, val] of Object.entries(map)) {
+    result = result.split(key).join(val);
+  }
+  return result;
+}
+
+async function loadSavedSettingsIntoRuntime() {
+  try {
+    const db = getDb();
+    if (typeof db.getSystemSettings !== 'function') {
+      return { templates: { ...cachedMessageTemplates } };
+    }
+    const saved = await db.getSystemSettings();
+    if (saved && saved.luan_whatsapp_number) {
+      const config = getConfig();
+      config.whatsapp.luanNumber = saved.luan_whatsapp_number;
+      process.env.LUAN_WHATSAPP_NUMBER = saved.luan_whatsapp_number;
+    }
+    if (saved && saved.message_templates && typeof saved.message_templates === 'object') {
+      cachedMessageTemplates = {
+        ...DEFAULT_MESSAGE_TEMPLATES,
+        ...saved.message_templates
+      };
+    }
+  } catch {
+    // fallback silencioso caso o banco ainda esteja inicializando
+  }
+  return {
+    templates: { ...cachedMessageTemplates },
+    defaults: { ...DEFAULT_MESSAGE_TEMPLATES }
+  };
+}
+
+function getMessageTemplatesSync() {
+  return { ...cachedMessageTemplates };
+}
+
+function setMessageTemplatesSync(customTemplates = {}) {
+  cachedMessageTemplates = {
+    ...DEFAULT_MESSAGE_TEMPLATES,
+    ...customTemplates
+  };
+  return { ...cachedMessageTemplates };
+}
+
 async function dispatchNotification({ eventKey, type, content }) {
+  await loadSavedSettingsIntoRuntime();
   const db = getDb();
   const config = getConfig();
   const recipient = config.whatsapp.luanNumber || '5511999999999';
@@ -182,22 +274,21 @@ function formatServicesList(items = []) {
  * Evento 1 — Novo agendamento
  */
 async function notifyNewAppointment(appointment) {
+  await loadSavedSettingsIntoRuntime();
   const servicesStr = formatServicesList(appointment.items);
   const dateStr = formatDateBR(appointment.appointment_date);
   const timeStr = `${appointment.start_time} às ${appointment.end_time}`;
   const valueStr = formatCurrencyBR(appointment.total_price);
   const phoneStr = formatPhoneBR(appointment.client_phone);
 
-  const content = [
-    'Novo agendamento na Luan Barber!',
-    '',
-    `Cliente: ${appointment.client_name}`,
-    `Telefone: ${phoneStr}`,
-    `Serviços: ${servicesStr}`,
-    `Data: ${dateStr}`,
-    `Horário: ${timeStr}`,
-    `Valor: ${valueStr}`
-  ].join('\n');
+  const content = renderMessageTemplate(cachedMessageTemplates.novo_agendamento, {
+    cliente: appointment.client_name,
+    telefone: phoneStr,
+    servicos: servicesStr,
+    data: dateStr,
+    horario: timeStr,
+    valor: valueStr
+  });
 
   return dispatchNotification({
     eventKey: `novo_agendamento:${appointment.id}`,
@@ -210,20 +301,21 @@ async function notifyNewAppointment(appointment) {
  * Evento 2 — Cancelamento pelo cliente
  */
 async function notifyClientCancellation(appointment) {
+  await loadSavedSettingsIntoRuntime();
   const servicesStr = formatServicesList(appointment.items);
   const dateStr = formatDateBR(appointment.appointment_date);
   const timeStr = `${appointment.start_time} às ${appointment.end_time}`;
+  const valueStr = formatCurrencyBR(appointment.total_price);
+  const phoneStr = formatPhoneBR(appointment.client_phone);
 
-  const content = [
-    'Um cliente desistiu do agendamento.',
-    '',
-    `Cliente: ${appointment.client_name}`,
-    `Data: ${dateStr}`,
-    `Horário: ${timeStr}`,
-    `Serviços: ${servicesStr}`,
-    '',
-    'O horário foi liberado na agenda.'
-  ].join('\n');
+  const content = renderMessageTemplate(cachedMessageTemplates.cancelamento_cliente, {
+    cliente: appointment.client_name,
+    telefone: phoneStr,
+    servicos: servicesStr,
+    data: dateStr,
+    horario: timeStr,
+    valor: valueStr
+  });
 
   return dispatchNotification({
     eventKey: `cancelamento_cliente:${appointment.id}`,
@@ -236,8 +328,10 @@ async function notifyClientCancellation(appointment) {
  * Evento 3 — Publicação da agenda semanal
  */
 async function notifySchedulePublished(weekStart, publishedAt) {
-  const content =
-    'Sua agenda semanal foi publicada com sucesso e já está disponível para os clientes.';
+  await loadSavedSettingsIntoRuntime();
+  const content = renderMessageTemplate(cachedMessageTemplates.publicacao_agenda, {
+    data: formatDateBR(weekStart)
+  });
   // Chave única por semana + publicação
   return dispatchNotification({
     eventKey: `publicacao_agenda:${weekStart}:${publishedAt || 'initial'}`,
@@ -250,16 +344,21 @@ async function notifySchedulePublished(weekStart, publishedAt) {
  * Evento 4 — Atendimento concluído
  */
 async function notifyAppointmentCompleted(appointment) {
+  await loadSavedSettingsIntoRuntime();
   const servicesStr = formatServicesList(appointment.items);
+  const dateStr = formatDateBR(appointment.appointment_date);
+  const timeStr = `${appointment.start_time} às ${appointment.end_time}`;
   const valueStr = formatCurrencyBR(appointment.total_price);
+  const phoneStr = formatPhoneBR(appointment.client_phone);
 
-  const content = [
-    'Atendimento finalizado na Luan Barber!',
-    '',
-    `Cliente: ${appointment.client_name}`,
-    `Serviços: ${servicesStr}`,
-    `Valor: ${valueStr}`
-  ].join('\n');
+  const content = renderMessageTemplate(cachedMessageTemplates.atendimento_concluido, {
+    cliente: appointment.client_name,
+    telefone: phoneStr,
+    servicos: servicesStr,
+    data: dateStr,
+    horario: timeStr,
+    valor: valueStr
+  });
 
   return dispatchNotification({
     eventKey: `atendimento_concluido:${appointment.id}`,
@@ -282,6 +381,11 @@ function getWhatsAppIntegrationStatus() {
 }
 
 module.exports = {
+  DEFAULT_MESSAGE_TEMPLATES,
+  renderMessageTemplate,
+  loadSavedSettingsIntoRuntime,
+  getMessageTemplatesSync,
+  setMessageTemplatesSync,
   notifyNewAppointment,
   notifyClientCancellation,
   notifySchedulePublished,

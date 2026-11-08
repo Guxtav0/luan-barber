@@ -2,15 +2,15 @@
   const state = {
     admin: null,
     integrations: null,
+    messageTemplates: null,
+    defaultTemplates: null,
     activeTab: 'agenda',
     currentWeekStart: UI.getMondayISO(UI.getTodayISO()),
     schedule: null,
     appointments: [],
     waitlist: [],
     services: [],
-    agendaViewMode: 'list', // 'list' | 'calendar'
-    agendaFilterDay: '',
-    agendaFilterStatus: '',
+    openDaySections: new Set(),
     waitlistFilterStatus: 'aguardando',
     financePeriod: 'este_mes',
     financeCustomStart: UI.getTodayISO(),
@@ -27,14 +27,21 @@
   }
 
   async function checkAuthSession() {
+    let data;
     try {
-      const data = await ApiClient.get('/api/auth/me');
-      state.admin = data.admin;
-      state.integrations = data.integrations;
-      showAdminApp();
-      await loadAllInitialData();
+      data = await ApiClient.get('/api/auth/me');
     } catch {
       showLoginScreen();
+      return;
+    }
+
+    state.admin = data.admin;
+    state.integrations = data.integrations;
+    showAdminApp();
+    try {
+      await loadAllInitialData();
+    } catch (err) {
+      console.error('Erro ao carregar dados iniciais:', err);
     }
   }
 
@@ -84,10 +91,25 @@
 
     const waInput = document.getElementById('settings-wa-number');
     if (waInput && state.integrations && state.integrations.whatsapp) {
-      const raw = state.integrations.whatsapp.number || '';
-      // Se começa com 55 e tem 12 ou 13 dígitos, remove o DDI 55 para exibir com máscara local
+      const raw =
+        state.integrations.whatsapp.rawRecipient ||
+        state.integrations.whatsapp.number ||
+        '';
       const localDigits = raw.startsWith('55') && raw.length >= 12 ? raw.slice(2) : raw;
       waInput.value = localDigits ? UI.formatPhoneDisplay(localDigits) : '';
+    }
+
+    if (state.messageTemplates) {
+      const tpl = state.messageTemplates;
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined) el.value = val;
+      };
+      setVal('tpl-mensagem-cliente', tpl.mensagem_cliente);
+      setVal('tpl-novo-agendamento', tpl.novo_agendamento);
+      setVal('tpl-cancelamento-cliente', tpl.cancelamento_cliente);
+      setVal('tpl-atendimento-concluido', tpl.atendimento_concluido);
+      setVal('tpl-publicacao-agenda', tpl.publicacao_agenda);
     }
   }
 
@@ -97,6 +119,12 @@
       if (data && data.whatsapp) {
         if (!state.integrations) state.integrations = {};
         state.integrations.whatsapp = data.whatsapp;
+      }
+      if (data && data.message_templates) {
+        state.messageTemplates = data.message_templates;
+      }
+      if (data && data.default_templates) {
+        state.defaultTemplates = data.default_templates;
       }
       syncSettingsTabUI();
     } catch {
@@ -125,7 +153,8 @@
   async function loadAllInitialData() {
     await Promise.all([
       loadAdminServices(),
-      loadAgendaData(state.currentWeekStart)
+      loadAgendaData(state.currentWeekStart),
+      loadSettingsTab()
     ]);
   }
 
@@ -185,7 +214,7 @@
       });
     });
 
-    // Aba 4: Configurações (WhatsApp e Tema)
+    // Aba 4: Configurações (WhatsApp, Mensagens Automáticas e Tema)
     const waSettingsForm = document.getElementById('settings-whatsapp-form');
     if (waSettingsForm) {
       waSettingsForm.addEventListener('submit', async (e) => {
@@ -204,6 +233,46 @@
         }
       });
     }
+
+    const msgSettingsForm = document.getElementById('settings-messages-form');
+    if (msgSettingsForm) {
+      msgSettingsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const templatesPayload = {
+          mensagem_cliente: document.getElementById('tpl-mensagem-cliente')?.value || '',
+          novo_agendamento: document.getElementById('tpl-novo-agendamento')?.value || '',
+          cancelamento_cliente: document.getElementById('tpl-cancelamento-cliente')?.value || '',
+          atendimento_concluido: document.getElementById('tpl-atendimento-concluido')?.value || '',
+          publicacao_agenda: document.getElementById('tpl-publicacao-agenda')?.value || ''
+        };
+        try {
+          const res = await ApiClient.put('/api/admin/settings', {
+            message_templates: templatesPayload
+          });
+          if (res.message_templates) {
+            state.messageTemplates = res.message_templates;
+          }
+          syncSettingsTabUI();
+          UI.toast('Mensagens automáticas salvas com sucesso!', 'success');
+        } catch (err) {
+          UI.toast(err.message || 'Erro ao salvar mensagens automáticas.', 'error');
+        }
+      });
+    }
+
+    document.getElementById('btn-reset-messages')?.addEventListener('click', async () => {
+      if (!state.defaultTemplates) return;
+      state.messageTemplates = { ...state.defaultTemplates };
+      syncSettingsTabUI();
+      try {
+        await ApiClient.put('/api/admin/settings', {
+          message_templates: state.defaultTemplates
+        });
+        UI.toast('Textos padrão restaurados!', 'info');
+      } catch {
+        UI.toast('Textos padrão carregados na tela.', 'info');
+      }
+    });
 
     document.getElementById('btn-theme-dark')?.addEventListener('click', () => {
       UI.setTheme('dark');
@@ -262,33 +331,6 @@
     });
     document.getElementById('btn-publish-schedule').addEventListener('click', () => {
       submitWeeklySchedule(true);
-    });
-
-    // Alternar modo Lista / Calendário
-    document.getElementById('view-mode-list').addEventListener('click', () => {
-      state.agendaViewMode = 'list';
-      updateAgendaViewModeButtons();
-      renderAppointmentsSection();
-    });
-    document.getElementById('view-mode-calendar').addEventListener('click', () => {
-      state.agendaViewMode = 'calendar';
-      updateAgendaViewModeButtons();
-      renderAppointmentsSection();
-    });
-
-    // Filtros da Agenda
-    document.getElementById('agenda-filter-day').addEventListener('change', (e) => {
-      state.agendaFilterDay = e.target.value;
-      renderAppointmentsSection();
-    });
-    document.getElementById('agenda-filter-status').addEventListener('change', (e) => {
-      state.agendaFilterStatus = e.target.value;
-      renderAppointmentsSection();
-    });
-
-    // Novo Agendamento Manual
-    document.getElementById('btn-new-manual-appointment').addEventListener('click', () => {
-      openAppointmentModal(null);
     });
 
     // Filtro Lista de Espera
@@ -373,7 +415,6 @@
 
       await reloadWaitlistOnly();
       renderScheduleHeaderAndEditor();
-      populateAgendaDayFilter();
       renderAppointmentsSection();
     } catch (err) {
       UI.toast(err.message || 'Erro ao carregar agenda da semana.', 'error');
@@ -501,6 +542,7 @@
         const idx = Number(e.target.getAttribute('data-day-idx'));
         state.schedule.days[idx].is_working = e.target.checked;
         renderScheduleHeaderAndEditor();
+        renderAppointmentsSection();
       });
     });
 
@@ -508,6 +550,7 @@
       sel.addEventListener('change', (e) => {
         const idx = Number(e.target.getAttribute('data-day-idx'));
         state.schedule.days[idx].start_time = e.target.value;
+        renderAppointmentsSection();
       });
     });
 
@@ -515,6 +558,7 @@
       sel.addEventListener('change', (e) => {
         const idx = Number(e.target.getAttribute('data-day-idx'));
         state.schedule.days[idx].end_time = e.target.value;
+        renderAppointmentsSection();
       });
     });
 
@@ -526,6 +570,7 @@
         }
         state.schedule.days[idx].breaks.push({ start: '12:00', end: '13:00' });
         renderScheduleHeaderAndEditor();
+        renderAppointmentsSection();
       });
     });
 
@@ -535,6 +580,7 @@
         const bIdx = Number(e.currentTarget.getAttribute('data-break-idx'));
         state.schedule.days[dIdx].breaks.splice(bIdx, 1);
         renderScheduleHeaderAndEditor();
+        renderAppointmentsSection();
       });
     });
 
@@ -543,6 +589,7 @@
         const dIdx = Number(e.target.getAttribute('data-day-idx'));
         const bIdx = Number(e.target.getAttribute('data-break-idx'));
         state.schedule.days[dIdx].breaks[bIdx].start = e.target.value;
+        renderAppointmentsSection();
       });
     });
 
@@ -551,6 +598,7 @@
         const dIdx = Number(e.target.getAttribute('data-day-idx'));
         const bIdx = Number(e.target.getAttribute('data-break-idx'));
         state.schedule.days[dIdx].breaks[bIdx].end = e.target.value;
+        renderAppointmentsSection();
       });
     });
   }
@@ -568,7 +616,6 @@
       });
       state.schedule = res.schedule;
       renderScheduleHeaderAndEditor();
-      populateAgendaDayFilter();
       renderAppointmentsSection();
       UI.toast(res.message, 'success');
     } catch (err) {
@@ -612,71 +659,6 @@
   }
 
   // ==================== 3.3 GERENCIAMENTO DE AGENDAMENTOS ====================
-  function updateAgendaViewModeButtons() {
-    const listBtn = document.getElementById('view-mode-list');
-    const calBtn = document.getElementById('view-mode-calendar');
-    const listView = document.getElementById('appointments-list-view');
-    const calView = document.getElementById('appointments-calendar-view');
-
-    if (state.agendaViewMode === 'list') {
-      listBtn.className = 'btn btn-sm btn-white';
-      calBtn.className = 'btn btn-sm btn-outline';
-      listView.classList.remove('hidden');
-      calView.classList.add('hidden');
-    } else {
-      calBtn.className = 'btn btn-sm btn-white';
-      listBtn.className = 'btn btn-sm btn-outline';
-      calView.classList.remove('hidden');
-      listView.classList.add('hidden');
-    }
-  }
-
-  function getVisibleAgendaDays() {
-    if (!state.schedule || !Array.isArray(state.schedule.days)) return [];
-    if (state.schedule.status === 'publicada') {
-      return state.schedule.days.filter((d) => d.is_working);
-    }
-    return state.schedule.days;
-  }
-
-  function populateAgendaDayFilter() {
-    const sel = document.getElementById('agenda-filter-day');
-    if (!state.schedule) return;
-    const visibleDays = getVisibleAgendaDays();
-    if (
-      state.agendaFilterDay &&
-      !visibleDays.some((d) => d.work_date === state.agendaFilterDay)
-    ) {
-      state.agendaFilterDay = '';
-    }
-    const currentVal = state.agendaFilterDay;
-    const defaultLabel =
-      state.schedule.status === 'publicada'
-        ? 'Todos os dias de trabalho'
-        : 'Todos os dias da semana';
-
-    sel.innerHTML =
-      `<option value="">${defaultLabel}</option>` +
-      visibleDays
-        .map(
-          (d) =>
-            `<option value="${d.work_date}" ${d.work_date === currentVal ? 'selected' : ''}>${UI.escapeHtml(d.dayName)} (${UI.escapeHtml(d.dateBR)})</option>`
-        )
-        .join('');
-  }
-
-  function getFilteredAppointments() {
-    const visibleDates = new Set(getVisibleAgendaDays().map((d) => d.work_date));
-    return (state.appointments || []).filter((a) => {
-      if (state.schedule?.status === 'publicada' && !visibleDates.has(a.appointment_date)) {
-        return false;
-      }
-      if (state.agendaFilterDay && a.appointment_date !== state.agendaFilterDay) return false;
-      if (state.agendaFilterStatus && a.status !== state.agendaFilterStatus) return false;
-      return true;
-    });
-  }
-
   function getStatusBadgeHtml(status) {
     if (status === 'concluido') return `<span class="badge badge-green">Concluído</span>`;
     if (status === 'cancelado') return `<span class="badge badge-red">Cancelado</span>`;
@@ -689,94 +671,160 @@
   }
 
   function renderAppointmentsSection() {
-    const filtered = getFilteredAppointments();
-    const activeCount = (state.appointments || []).filter((a) => a.status !== 'cancelado').length;
-    document.getElementById('agenda-summary-counts').textContent =
-      `${filtered.length} exibido(s) • ${activeCount} ativo(s) na semana`;
-
-    renderAppointmentsListView(filtered);
-    renderAppointmentsCalendarView();
-  }
-
-  function renderAppointmentsListView(list) {
     const container = document.getElementById('appointments-list-view');
-    if (!list.length) {
+    if (!container || !state.schedule) return;
+
+    const workingDays = (state.schedule.days || []).filter((d) => d.is_working);
+    const activeApps = (state.appointments || []).filter((a) => a.status !== 'cancelado');
+
+    const summaryEl = document.getElementById('agenda-summary-counts');
+    if (summaryEl) {
+      summaryEl.textContent = `${workingDays.length} dia(s) de trabalho • ${activeApps.length} agendamento(s) na semana`;
+    }
+
+    if (workingDays.length === 0) {
       container.innerHTML = `
         <div style="text-align: center; padding: 32px 16px; color: var(--text-gray);">
-          Nenhum agendamento encontrado para os filtros selecionados nesta semana.
+          Nenhum dia de trabalho selecionado para esta semana. Habilite os dias desejados na seção "1. Configurar Disponibilidade da Semana".
         </div>
       `;
       return;
     }
 
-    container.innerHTML = list
-      .map(
-        (app) => `
-        <div class="schedule-day-row" style="margin-bottom: 10px;">
-          <div class="flex-between">
-            <div>
+    container.innerHTML = workingDays
+      .map((day) => {
+        const dayApps = activeApps
+          .filter((a) => a.appointment_date === day.work_date)
+          .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+        const workBlocks = UI.generateDayWorkBlocks(day);
+        const freeBlocks = workBlocks.filter((t) => {
+          const tMin = UI.timeToMinutes(t);
+          return !dayApps.some(
+            (a) => tMin >= UI.timeToMinutes(a.start_time) && tMin < UI.timeToMinutes(a.end_time)
+          );
+        });
+
+        const confirmedCount = dayApps.length;
+        const availableCount = freeBlocks.length;
+        const isOpen = state.openDaySections.has(day.work_date);
+
+        const compactListHtml = dayApps.length
+          ? dayApps
+              .map(
+                (app) => `
+              <div class="flex-between" style="padding: 10px 12px; background: var(--bg-black); border: 1px solid var(--border-gray); border-radius: var(--radius-sm); margin-top: 8px;">
+                <div class="flex-gap">
+                  <span class="badge" style="font-size: 0.85rem; font-weight: 700; color: var(--text-white);">${UI.escapeHtml(app.start_time)}</span>
+                  <strong style="font-size: 0.98rem; color: var(--text-white);">${UI.escapeHtml(app.client_name)}</strong>
+                </div>
+
+                <div class="flex-gap">
+                  <button
+                    type="button"
+                    class="btn btn-sm ${app.payment_status === 'pago' ? 'btn-green' : 'btn-yellow'} btn-quick-payment"
+                    data-id="${app.id}"
+                    data-next-pay="${app.payment_status === 'pago' ? 'pendente' : 'pago'}"
+                  >
+                    ${app.payment_status === 'pago' ? '✓ Pago' : 'Pago'}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline btn-edit-app"
+                    data-id="${app.id}"
+                  >
+                    Editar
+                  </button>
+                </div>
+              </div>
+            `
+              )
+              .join('')
+          : `
+            <div class="text-muted" style="padding: 14px 10px; text-align: center; background: var(--bg-black); border: 1px dashed var(--border-gray); border-radius: var(--radius-sm); margin-top: 8px;">
+              Nenhum agendamento confirmado neste dia. Clique no botão <strong>+</strong> ao lado para agendar.
+            </div>
+          `;
+
+        return `
+          <div class="schedule-day-row working" style="margin-bottom: 12px;">
+            <div class="flex-between day-section-header" data-date="${day.work_date}" style="cursor: pointer; user-select: none;">
+              <div>
+                <div class="flex-gap">
+                  <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-white); margin: 0;">
+                    ${UI.escapeHtml(day.dayName)}
+                  </h4>
+                  <span class="badge">${UI.escapeHtml(day.dateBR)}</span>
+                </div>
+                <div style="margin-top: 6px; font-size: 0.84rem; color: var(--text-gray); display: flex; flex-direction: column; gap: 2px;">
+                  <span>Confirmados: <strong style="color: var(--text-white);">${confirmedCount}</strong></span>
+                  <span>Disponíveis: <strong style="color: var(--green-text);">${availableCount}</strong></span>
+                </div>
+              </div>
+
               <div class="flex-gap">
-                <strong style="font-size: 1.02rem;">${UI.escapeHtml(app.start_time)} às ${UI.escapeHtml(app.end_time)}</strong>
-                <span class="badge">${UI.escapeHtml(app.dayName)}, ${UI.escapeHtml(app.dateBR)}</span>
-                ${getStatusBadgeHtml(app.status)}
-                ${app.status !== 'cancelado' ? getPaymentBadgeHtml(app.payment_status) : ''}
-              </div>
-              <div style="margin-top: 6px; font-weight: 600; font-size: 1rem;">
-                ${UI.escapeHtml(app.client_name)}
-                <a href="${UI.escapeHtml(app.client_whatsapp_url)}" target="_blank" class="text-muted" style="margin-left: 8px; text-decoration: underline;">
-                  ${UI.escapeHtml(app.client_phone_formatted)} ↗
-                </a>
-              </div>
-              <div class="text-muted" style="margin-top: 4px;">
-                Serviços: <strong style="color: var(--text-light);">${UI.escapeHtml(app.services_summary)}</strong>
-                • Duração: ${app.total_duration} min
-                • Valor total: <strong style="color: var(--text-white);">${UI.escapeHtml(app.total_price_formatted)}</strong>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-green btn-add-day-appointment"
+                  data-date="${day.work_date}"
+                  title="Novo agendamento em ${UI.escapeHtml(day.dayName)}"
+                  style="font-size: 1.1rem; font-weight: 800; padding: 6px 12px; line-height: 1;"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  class="chevron-toggle-btn ${isOpen ? 'open' : ''} btn-toggle-day-section"
+                  data-date="${day.work_date}"
+                  aria-label="Expandir ou recolher agendamentos do dia"
+                >
+                  <span class="chevron-icon">&gt;</span>
+                </button>
               </div>
             </div>
 
-            <div class="flex-gap">
-              ${
-                app.status === 'confirmado'
-                  ? `
-                <button type="button" class="btn btn-sm btn-green btn-quick-complete" data-id="${app.id}">
-                  ✓ Concluir
-                </button>
-              `
-                  : ''
-              }
-              ${
-                app.status !== 'cancelado'
-                  ? `
-                <button type="button" class="btn btn-sm ${app.payment_status === 'pago' ? 'btn-outline' : 'btn-yellow'} btn-quick-payment" data-id="${app.id}" data-next-pay="${app.payment_status === 'pago' ? 'pendente' : 'pago'}">
-                  ${app.payment_status === 'pago' ? 'Marcar Pendente' : '$ Marcar Pago'}
-                </button>
-              `
-                  : ''
-              }
-              <button type="button" class="btn btn-sm btn-outline btn-edit-app" data-id="${app.id}">
-                Editar / Detalhes
-              </button>
-              ${
-                app.status !== 'cancelado'
-                  ? `
-                <button type="button" class="btn btn-sm btn-red btn-cancel-app" data-id="${app.id}">
-                  Cancelar
-                </button>
-              `
-                  : ''
-              }
+            <div class="day-section-body ${isOpen ? '' : 'hidden'}" data-date="${day.work_date}" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-gray);">
+              ${compactListHtml}
             </div>
           </div>
-        </div>
-      `
-      )
+        `;
+      })
       .join('');
 
-    // Bind quick actions
-    container.querySelectorAll('.btn-quick-complete').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-id');
-        await quickUpdateAppointment(id, { status: 'concluido' });
+    const toggleDaySection = (dateStr) => {
+      if (state.openDaySections.has(dateStr)) {
+        state.openDaySections.delete(dateStr);
+      } else {
+        state.openDaySections.add(dateStr);
+      }
+      renderAppointmentsSection();
+    };
+
+    container.querySelectorAll('.day-section-header').forEach((hdr) => {
+      hdr.addEventListener('click', (e) => {
+        if (
+          e.target.closest('.btn-add-day-appointment') ||
+          e.target.closest('.btn-toggle-day-section')
+        ) {
+          return;
+        }
+        toggleDaySection(hdr.getAttribute('data-date'));
+      });
+    });
+
+    container.querySelectorAll('.btn-toggle-day-section').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleDaySection(btn.getAttribute('data-date'));
+      });
+    });
+
+    container.querySelectorAll('.btn-add-day-appointment').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const dateStr = btn.getAttribute('data-date');
+        state.openDaySections.add(dateStr);
+        openAppointmentModal(null, null, dateStr);
       });
     });
 
@@ -791,95 +839,6 @@
     container.querySelectorAll('.btn-edit-app').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
-        const app = state.appointments.find((a) => a.id === id);
-        if (app) openAppointmentModal(app);
-      });
-    });
-
-    container.querySelectorAll('.btn-cancel-app').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-id');
-        const app = state.appointments.find((a) => a.id === id);
-        if (!app) return;
-        const confirmed = await UI.confirm({
-          title: 'Cancelar agendamento',
-          message: `Deseja realmente cancelar o agendamento de ${app.client_name} em ${app.dateBR} às ${app.start_time}? O horário será liberado imediatamente.`,
-          confirmText: 'Sim, cancelar agendamento',
-          danger: true
-        });
-        if (confirmed) {
-          await quickUpdateAppointment(id, { status: 'cancelado' });
-        }
-      });
-    });
-  }
-
-  function renderAppointmentsCalendarView() {
-    const container = document.getElementById('appointments-calendar-view');
-    if (!state.schedule) return;
-
-    const visibleDays = getVisibleAgendaDays().filter(
-      (d) => !state.agendaFilterDay || d.work_date === state.agendaFilterDay
-    );
-
-    if (!visibleDays.length) {
-      container.innerHTML = `
-        <div style="text-align: center; padding: 32px 16px; color: var(--text-gray);">
-          Nenhum dia de trabalho selecionado para exibição.
-        </div>
-      `;
-      return;
-    }
-
-    const colsHtml = visibleDays
-      .map((day) => {
-        const dayApps = (state.appointments || []).filter(
-          (a) =>
-            a.appointment_date === day.work_date &&
-            (!state.agendaFilterStatus || a.status === state.agendaFilterStatus)
-        );
-
-        const cardsHtml = dayApps.length
-          ? dayApps
-              .map(
-                (app) => `
-              <div class="calendar-slot-card" data-app-id="${app.id}">
-                <div class="flex-between" style="margin-bottom: 4px;">
-                  <strong>${UI.escapeHtml(app.start_time)} - ${UI.escapeHtml(app.end_time)}</strong>
-                  ${getStatusBadgeHtml(app.status)}
-                </div>
-                <div style="font-weight: 600; color: var(--text-white);">${UI.escapeHtml(app.client_name)}</div>
-                <div class="text-muted" style="font-size: 0.75rem;">${UI.escapeHtml(app.services_summary)}</div>
-                <div class="flex-between" style="margin-top: 6px;">
-                  <span style="font-weight: 700;">${UI.escapeHtml(app.total_price_formatted)}</span>
-                  ${app.status !== 'cancelado' ? getPaymentBadgeHtml(app.payment_status) : ''}
-                </div>
-              </div>
-            `
-              )
-              .join('')
-          : `<div class="text-muted" style="font-size: 0.8rem; padding: 12px 0; text-align: center;">Sem agendamentos</div>`;
-
-        return `
-          <div class="calendar-day-column">
-            <div style="border-bottom: 1px solid var(--border-gray); padding-bottom: 8px; margin-bottom: 8px;">
-              <div style="font-weight: 700; font-size: 0.9rem;">${UI.escapeHtml(day.dayShortName)} — ${UI.escapeHtml(day.dateBR.slice(0, 5))}</div>
-              <div class="text-muted" style="font-size: 0.75rem;">
-                ${day.is_working ? `${day.start_time} às ${day.end_time}` : 'Não trabalha'}
-              </div>
-            </div>
-            ${cardsHtml}
-          </div>
-        `;
-      })
-      .join('');
-
-    const colCount = Math.max(visibleDays.length, 1);
-    container.innerHTML = `<div class="calendar-grid-wrapper" style="grid-template-columns: repeat(${colCount}, minmax(175px, 1fr));">${colsHtml}</div>`;
-
-    container.querySelectorAll('.calendar-slot-card').forEach((card) => {
-      card.addEventListener('click', () => {
-        const id = card.getAttribute('data-app-id');
         const app = state.appointments.find((a) => a.id === id);
         if (app) openAppointmentModal(app);
       });
@@ -903,11 +862,14 @@
   }
 
   // ==================== MODAL DE EDIÇÃO / CRIAÇÃO DE AGENDAMENTO ====================
-  function openAppointmentModal(appointment = null, prefillFromWaitlist = null) {
+  function openAppointmentModal(
+    appointment = null,
+    prefillFromWaitlist = null,
+    preselectedDate = null
+  ) {
     const isEdit = Boolean(appointment);
     const root = document.getElementById('admin-modal-root');
 
-    // Não pré-seleciona serviço silenciosamente no novo agendamento para evitar desmarcar ao clicar
     const selectedServiceIds = new Set(
       isEdit
         ? (appointment.items || []).map((i) => i.service_id).filter(Boolean)
@@ -917,26 +879,108 @@
     );
 
     const workingDays = (state.schedule?.days || []).filter((d) => d.is_working);
+    const availableDaysForSelect = [...workingDays];
+
+    // Caso esteja editando um agendamento antigo de um dia que não está em workingDays, inclui na lista para não quebrar a edição
+    if (
+      isEdit &&
+      appointment.appointment_date &&
+      !availableDaysForSelect.some((d) => d.work_date === appointment.appointment_date)
+    ) {
+      const existingDay = (state.schedule?.days || []).find(
+        (d) => d.work_date === appointment.appointment_date
+      );
+      if (existingDay) {
+        availableDaysForSelect.push(existingDay);
+      } else {
+        availableDaysForSelect.push({
+          work_date: appointment.appointment_date,
+          dayName: appointment.dayName || UI.formatDateBR(appointment.appointment_date),
+          dateBR: appointment.dateBR || UI.formatDateBR(appointment.appointment_date),
+          is_working: true,
+          start_time: '09:00',
+          end_time: '18:00',
+          breaks: []
+        });
+      }
+    }
+
     const defaultWorkDay =
-      workingDays.find((d) => d.work_date === state.agendaFilterDay) ||
-      workingDays[0] ||
+      (preselectedDate && availableDaysForSelect.find((d) => d.work_date === preselectedDate)) ||
+      availableDaysForSelect[0] ||
       state.schedule?.days?.[0];
 
     const initialDate = isEdit
       ? appointment.appointment_date
-      : defaultWorkDay?.work_date || UI.getTodayISO();
+      : preselectedDate || defaultWorkDay?.work_date || UI.getTodayISO();
 
     const getDayScheduleForDate = (dateStr) => {
-      return (state.schedule?.days || []).find((d) => d.work_date === dateStr) || null;
+      return (
+        availableDaysForSelect.find((d) => d.work_date === dateStr) ||
+        (state.schedule?.days || []).find((d) => d.work_date === dateStr) ||
+        null
+      );
     };
 
-    const initialDayCfg = getDayScheduleForDate(initialDate);
-    // O horário de início padrão é exatamente o horário de início definido na agenda semanal para o dia
+    // Calcula o primeiro horário livre naquele dia (considerando agendamentos ativos e duração necessária)
+    const getFirstAvailableSlotForDate = (dateStr, requiredDuration = 30) => {
+      const dayCfg = getDayScheduleForDate(dateStr);
+      let blocks = [];
+      if (dayCfg && dayCfg.is_working) {
+        blocks = UI.generateDayWorkBlocks(dayCfg);
+      }
+      if (blocks.length === 0) {
+        blocks = TIME_OPTIONS;
+      }
+
+      const occupiedApps = (state.appointments || []).filter(
+        (a) =>
+          a.appointment_date === dateStr &&
+          a.status !== 'cancelado' &&
+          (!isEdit || a.id !== appointment.id)
+      );
+
+      const dur = Math.max(30, requiredDuration);
+      const dayEndMin =
+        dayCfg && dayCfg.is_working ? UI.timeToMinutes(dayCfg.end_time) : 24 * 60;
+      const breaks = Array.isArray(dayCfg?.breaks) ? dayCfg.breaks : [];
+
+      // Procura primeiro bloco que comporte toda a duração sem conflito
+      for (const t of blocks) {
+        const startMin = UI.timeToMinutes(t);
+        const endMin = startMin + dur;
+        if (endMin > dayEndMin) continue;
+
+        const hitsBreak = breaks.some(
+          (b) => startMin < UI.timeToMinutes(b.end) && endMin > UI.timeToMinutes(b.start)
+        );
+        if (hitsBreak) continue;
+
+        const hitsApp = occupiedApps.some(
+          (a) =>
+            startMin < UI.timeToMinutes(a.end_time) && endMin > UI.timeToMinutes(a.start_time)
+        );
+        if (!hitsApp) {
+          return t;
+        }
+      }
+
+      // Fallback: primeiro bloco de 30min não ocupado
+      for (const t of blocks) {
+        const tMin = UI.timeToMinutes(t);
+        const isOcc = occupiedApps.some(
+          (a) => tMin >= UI.timeToMinutes(a.start_time) && tMin < UI.timeToMinutes(a.end_time)
+        );
+        if (!isOcc) return t;
+      }
+
+      return dayCfg && dayCfg.is_working ? dayCfg.start_time : blocks[0];
+    };
+
+    const initialDuration = Math.max(30, selectedServiceIds.size * 30);
     const initialTime = isEdit
       ? appointment.start_time
-      : initialDayCfg && initialDayCfg.is_working
-        ? initialDayCfg.start_time
-        : '09:00';
+      : getFirstAvailableSlotForDate(initialDate, initialDuration);
 
     const initialName = isEdit
       ? appointment.client_name
@@ -951,7 +995,7 @@
         ? prefillFromWaitlist.phone_formatted
         : '';
 
-    const buildTimeSelectOptions = (dateStr, targetTime = null) => {
+    const buildTimeSelectOptions = (dateStr, targetTime = null, requiredDuration = 30) => {
       const dayCfg = getDayScheduleForDate(dateStr);
       let blocks = [];
       if (dayCfg && dayCfg.is_working) {
@@ -963,9 +1007,7 @@
       const chosenTime =
         targetTime && blocks.includes(targetTime)
           ? targetTime
-          : dayCfg && dayCfg.is_working
-            ? dayCfg.start_time
-            : blocks[0];
+          : getFirstAvailableSlotForDate(dateStr, requiredDuration);
 
       const occupiedApps = (state.appointments || []).filter(
         (a) =>
@@ -993,7 +1035,20 @@
       return { optionsHtml, infoText, isWorking: Boolean(dayCfg && dayCfg.is_working) };
     };
 
-    const initialTimeBuild = buildTimeSelectOptions(initialDate, initialTime);
+    const initialTimeBuild = buildTimeSelectOptions(
+      initialDate,
+      initialTime,
+      initialDuration
+    );
+
+    const dateSelectOptionsHtml = availableDaysForSelect.length
+      ? availableDaysForSelect
+          .map(
+            (d) =>
+              `<option value="${d.work_date}" ${d.work_date === initialDate ? 'selected' : ''}>${UI.escapeHtml(d.dayName)} (${UI.escapeHtml(d.dateBR)})</option>`
+          )
+          .join('')
+      : `<option value="${UI.escapeHtml(initialDate)}" selected>${UI.escapeHtml(UI.formatDateBR(initialDate))}</option>`;
 
     const servicesCheckboxesHtml = state.services
       .map((s) => {
@@ -1038,8 +1093,10 @@
 
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Data do atendimento</label>
-                <input type="date" id="modal-app-date" class="form-control" value="${UI.escapeHtml(initialDate)}" required />
+                <label class="form-label">Data disponível na agenda</label>
+                <select id="modal-app-date" class="form-control" required>
+                  ${dateSelectOptionsHtml}
+                </select>
               </div>
               <div class="form-group">
                 <label class="form-label">Horário de início</label>
@@ -1090,10 +1147,21 @@
               isEdit
                 ? `
               <div class="alert" style="margin-top: 10px; margin-bottom: 0;">
-                <div style="font-size: 0.8rem; color: var(--text-gray);">Link exclusivo de gerenciamento do cliente:</div>
-                <div class="flex-between" style="margin-top: 4px;">
-                  <code style="font-size: 0.78rem; word-break: break-all;">${window.location.origin}${UI.escapeHtml(appointment.management_url)}</code>
-                  <a href="${UI.escapeHtml(appointment.management_url)}" target="_blank" class="btn btn-sm btn-outline">Abrir Link ↗</a>
+                <div style="font-size: 0.8rem; color: var(--text-gray);">Ações rápidas e Link do cliente:</div>
+                <div class="flex-between" style="margin-top: 6px;">
+                  <div class="flex-gap">
+                    ${
+                      appointment.client_whatsapp_url
+                        ? `<a href="${UI.escapeHtml(appointment.client_whatsapp_url)}" target="_blank" class="btn btn-sm btn-green">Enviar WhatsApp ↗</a>`
+                        : ''
+                    }
+                    <a href="${UI.escapeHtml(appointment.management_url)}" target="_blank" class="btn btn-sm btn-outline">Link do Cliente ↗</a>
+                  </div>
+                  ${
+                    appointment.status !== 'cancelado'
+                      ? `<button type="button" class="btn btn-sm btn-red" id="modal-quick-cancel-btn">Cancelar Agendamento</button>`
+                      : ''
+                  }
                 </div>
               </div>
             `
@@ -1101,7 +1169,7 @@
             }
 
             <div class="modal-footer">
-              <button type="button" class="btn btn-outline" id="modal-cancel-btn">Cancelar</button>
+              <button type="button" class="btn btn-outline" id="modal-cancel-btn">Fechar</button>
               <button type="submit" class="btn btn-green" id="modal-save-btn">
                 ${isEdit ? 'Salvar Alterações' : 'Confirmar Agendamento'}
               </button>
@@ -1113,6 +1181,11 @@
 
     const phoneInput = document.getElementById('modal-client-phone');
     UI.attachPhoneMask(phoneInput);
+
+    const getModalSelectedDuration = () => {
+      const checkedCount = root.querySelectorAll('.modal-service-cb:checked').length;
+      return Math.max(30, checkedCount * 30);
+    };
 
     const updateModalServiceSummary = () => {
       const checkedIds = Array.from(root.querySelectorAll('.modal-service-cb:checked')).map(
@@ -1132,10 +1205,10 @@
     };
     updateModalServiceSummary();
 
-    // Ao mudar a data no modal, atualiza o select de horário para começar no horário de início definido na agenda semanal daquele dia
+    // Ao mudar a data no modal, pré-seleciona automaticamente o primeiro horário livre daquele dia
     document.getElementById('modal-app-date').addEventListener('change', (e) => {
       const newDate = e.target.value;
-      const built = buildTimeSelectOptions(newDate, null);
+      const built = buildTimeSelectOptions(newDate, null, getModalSelectedDuration());
       document.getElementById('modal-app-time').innerHTML = built.optionsHtml;
       const hintEl = document.getElementById('modal-day-schedule-hint');
       hintEl.textContent = built.infoText;
@@ -1148,6 +1221,18 @@
 
     document.getElementById('modal-close-btn').addEventListener('click', closeModal);
     document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+
+    document.getElementById('modal-quick-cancel-btn')?.addEventListener('click', async () => {
+      const confirmed = await UI.confirm({
+        title: 'Cancelar agendamento',
+        message: `Deseja realmente cancelar o agendamento de ${appointment.client_name} em ${appointment.dateBR} às ${appointment.start_time}?`,
+        confirmText: 'Sim, cancelar',
+        danger: true
+      });
+      if (!confirmed) return;
+      closeModal();
+      await quickUpdateAppointment(appointment.id, { status: 'cancelado' });
+    });
 
     root.querySelectorAll('.modal-service-cb').forEach((cb) => {
       cb.addEventListener('change', (e) => {
@@ -1527,24 +1612,50 @@
 
     container.innerHTML = state.services
       .map(
-        (svc) => `
+        (svc, idx) => `
         <div class="schedule-day-row" style="margin-bottom: 10px;">
           <div class="flex-between">
-            <div>
-              <div class="flex-gap">
-                <strong style="font-size: 1.05rem;">${UI.escapeHtml(svc.name)}</strong>
-                <span class="badge ${svc.active ? 'badge-green' : 'badge-red'}">
-                  ${svc.active ? 'Ativo' : 'Inativo'}
-                </span>
-                <span class="badge">Duração fixa: 30 min</span>
+            <div class="flex-gap">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline btn-move-service-up"
+                  data-idx="${idx}"
+                  ${idx === 0 ? 'disabled' : ''}
+                  title="Mover serviço para cima"
+                  style="padding: 3px 8px; line-height: 1;"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline btn-move-service-down"
+                  data-idx="${idx}"
+                  ${idx === state.services.length - 1 ? 'disabled' : ''}
+                  title="Mover serviço para baixo"
+                  style="padding: 3px 8px; line-height: 1;"
+                >
+                  ↓
+                </button>
               </div>
-              ${
-                svc.description
-                  ? `<div class="text-muted" style="margin-top: 4px;">${UI.escapeHtml(svc.description)}</div>`
-                  : ''
-              }
-              <div style="font-size: 1.15rem; font-weight: 800; margin-top: 6px; color: var(--text-white);">
-                ${UI.escapeHtml(svc.price_formatted)}
+
+              <div>
+                <div class="flex-gap">
+                  <span class="badge">${idx + 1}º</span>
+                  <strong style="font-size: 1.05rem;">${UI.escapeHtml(svc.name)}</strong>
+                  <span class="badge ${svc.active ? 'badge-green' : 'badge-red'}">
+                    ${svc.active ? 'Ativo' : 'Inativo'}
+                  </span>
+                  <span class="badge">Duração fixa: 30 min</span>
+                </div>
+                ${
+                  svc.description
+                    ? `<div class="text-muted" style="margin-top: 4px;">${UI.escapeHtml(svc.description)}</div>`
+                    : ''
+                }
+                <div style="font-size: 1.15rem; font-weight: 800; margin-top: 6px; color: var(--text-white);">
+                  ${UI.escapeHtml(svc.price_formatted)}
+                </div>
               </div>
             </div>
 
@@ -1564,6 +1675,43 @@
       `
       )
       .join('');
+
+    const moveService = async (fromIdx, toIdx) => {
+      if (toIdx < 0 || toIdx >= state.services.length) return;
+      const reordered = [...state.services];
+      const [moved] = reordered.splice(fromIdx, 1);
+      reordered.splice(toIdx, 0, moved);
+      state.services = reordered;
+      renderAdminServices();
+
+      try {
+        const res = await ApiClient.put('/api/admin/services/reorder', {
+          ordered_ids: reordered.map((s) => s.id)
+        });
+        if (res.services) {
+          state.services = res.services;
+          renderAdminServices();
+        }
+        UI.toast('Ordem dos serviços atualizada!', 'success');
+      } catch (err) {
+        UI.toast(err.message || 'Erro ao reordenar serviços.', 'error');
+        await loadAdminServices();
+      }
+    };
+
+    container.querySelectorAll('.btn-move-service-up').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-idx'));
+        moveService(idx, idx - 1);
+      });
+    });
+
+    container.querySelectorAll('.btn-move-service-down').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-idx'));
+        moveService(idx, idx + 1);
+      });
+    });
 
     container.querySelectorAll('.btn-toggle-service').forEach((btn) => {
       btn.addEventListener('click', async () => {

@@ -316,12 +316,24 @@
 
     const slots = dayObj.available_slots || [];
     if (slots.length === 0) {
+      state.selectedSlot = null;
       container.innerHTML = `
         <div style="padding: 16px; text-align: center; color: var(--text-gray); background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-gray);">
           Não há horários consecutivos disponíveis em <strong>${UI.escapeHtml(dayObj.dayName)} (${UI.escapeHtml(dayObj.dateBR)})</strong> para a duração selecionada. Escolha outro dia acima ou entre na lista de espera abaixo.
         </div>
       `;
       return;
+    }
+
+    // Pré-seleciona automaticamente o primeiro horário liberado do dia
+    if (
+      !state.selectedSlot ||
+      !slots.some((s) => s.start_time === state.selectedSlot.start_time)
+    ) {
+      state.selectedSlot = {
+        start_time: slots[0].start_time,
+        end_time: slots[0].end_time
+      };
     }
 
     container.innerHTML = `

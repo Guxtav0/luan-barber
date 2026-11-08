@@ -76,9 +76,21 @@ async function deleteService(id) {
   return { deleted: true };
 }
 
+async function reorderServices(orderedIds = []) {
+  const db = getDb();
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    const err = new Error('Informe a lista ordenada de serviços.');
+    err.statusCode = 400;
+    throw err;
+  }
+  const list = await db.reorderServices(orderedIds);
+  return list.map(enrichService);
+}
+
 module.exports = {
   listServices,
   createService,
   updateService,
-  deleteService
+  deleteService,
+  reorderServices
 };

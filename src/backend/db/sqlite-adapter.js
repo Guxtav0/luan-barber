@@ -305,6 +305,22 @@ class SqliteAdapter {
     return true;
   }
 
+  async reorderServices(orderedIds = []) {
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return this.listServices({ activeOnly: false });
+    }
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(
+      'UPDATE services SET sort_order = ?, updated_at = ? WHERE id = ?'
+    );
+    this.runInTransaction(() => {
+      orderedIds.forEach((id, idx) => {
+        stmt.run(idx + 1, now, id);
+      });
+    });
+    return this.listServices({ activeOnly: false });
+  }
+
   // ==================== SCHEDULE ====================
   _mapScheduleDay(row) {
     if (!row) return null;
@@ -870,8 +886,46 @@ class SqliteAdapter {
 
   async listNotifications(limit = 50) {
     return this.db
-      .prepare('SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?')
+      .prepare(
+        "SELECT * FROM notifications WHERE event_key IS NULL OR event_key != '__system_settings__' ORDER BY created_at DESC LIMIT ?"
+      )
       .all(Number(limit || 50));
+  }
+
+  async getSystemSettings() {
+    const row = this.db
+      .prepare("SELECT content FROM notifications WHERE event_key = '__system_settings__' LIMIT 1")
+      .get();
+    if (!row || !row.content) return {};
+    try {
+      return JSON.parse(row.content);
+    } catch {
+      return {};
+    }
+  }
+
+  async saveSystemSettings(patch = {}) {
+    const current = await this.getSystemSettings();
+    const merged = { ...current, ...patch };
+    const jsonStr = JSON.stringify(merged);
+    const existing = this.db
+      .prepare("SELECT id FROM notifications WHERE event_key = '__system_settings__' LIMIT 1")
+      .get();
+    if (existing) {
+      this.db
+        .prepare("UPDATE notifications SET content = ? WHERE id = ?")
+        .run(jsonStr, existing.id);
+    } else {
+      const id = generateUUID();
+      const now = new Date().toISOString();
+      this.db
+        .prepare(`
+          INSERT INTO notifications (id, event_key, type, recipient, content, status, attempts, error, created_at, sent_at)
+          VALUES (?, '__system_settings__', 'publicacao_agenda', 'system', ?, 'enviada', 0, NULL, ?, ?)
+        `)
+        .run(id, jsonStr, now, now);
+    }
+    return merged;
   }
 }
 

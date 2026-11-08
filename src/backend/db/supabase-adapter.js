@@ -134,6 +134,8 @@ class SupabaseAdapter {
   }
 
   async createService({ name, description = '', price, active = true }) {
+    const existing = await this._rest('services?select=sort_order&order=sort_order.desc&limit=1');
+    const maxSort = existing && existing[0] ? Number(existing[0].sort_order || 0) : 0;
     const rows = await this._rest('services', {
       method: 'POST',
       body: {
@@ -141,7 +143,8 @@ class SupabaseAdapter {
         description: description.trim(),
         price: Number(price),
         duration: 30,
-        active: Boolean(active)
+        active: Boolean(active),
+        sort_order: maxSort + 1
       }
     });
     return this.getServiceById(rows[0].id);
@@ -164,6 +167,22 @@ class SupabaseAdapter {
   async deleteService(id) {
     await this._rest(`services?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
     return true;
+  }
+
+  async reorderServices(orderedIds = []) {
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return this.listServices({ activeOnly: false });
+    }
+    const now = new Date().toISOString();
+    await Promise.all(
+      orderedIds.map((id, idx) =>
+        this._rest(`services?id=eq.${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: { sort_order: idx + 1, updated_at: now }
+        })
+      )
+    );
+    return this.listServices({ activeOnly: false });
   }
 
   // ==================== SCHEDULE ====================
@@ -502,9 +521,47 @@ class SupabaseAdapter {
   }
 
   async listNotifications(limit = 50) {
-    return (
-      (await this._rest(`notifications?order=created_at.desc&limit=${Number(limit || 50)}`)) || []
-    );
+    const rows =
+      (await this._rest(`notifications?order=created_at.desc&limit=${Number(limit || 50) + 5}`)) ||
+      [];
+    return rows.filter((r) => r.event_key !== '__system_settings__').slice(0, Number(limit || 50));
+  }
+
+  async getSystemSettings() {
+    const rows = await this._rest('notifications?event_key=eq.__system_settings__&limit=1');
+    if (!rows || !rows[0] || !rows[0].content) return {};
+    try {
+      return JSON.parse(rows[0].content);
+    } catch {
+      return {};
+    }
+  }
+
+  async saveSystemSettings(patch = {}) {
+    const current = await this.getSystemSettings();
+    const merged = { ...current, ...patch };
+    const jsonStr = JSON.stringify(merged);
+    const rows = await this._rest('notifications?event_key=eq.__system_settings__&limit=1');
+    if (rows && rows[0]) {
+      await this._rest(`notifications?id=eq.${encodeURIComponent(rows[0].id)}`, {
+        method: 'PATCH',
+        body: { content: jsonStr }
+      });
+    } else {
+      await this._rest('notifications', {
+        method: 'POST',
+        body: {
+          id: generateUUID(),
+          event_key: '__system_settings__',
+          type: 'publicacao_agenda',
+          recipient: 'system',
+          content: jsonStr,
+          status: 'enviada',
+          attempts: 0
+        }
+      });
+    }
+    return merged;
   }
 }
 

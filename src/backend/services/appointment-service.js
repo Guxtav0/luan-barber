@@ -18,23 +18,44 @@ const {
 const {
   notifyNewAppointment,
   notifyClientCancellation,
-  notifyAppointmentCompleted
+  notifyAppointmentCompleted,
+  getMessageTemplatesSync,
+  renderMessageTemplate
 } = require('./whatsapp-service');
 const { evaluateWaitlistForDate } = require('./waitlist-service');
 
 function enrichAppointment(app) {
   if (!app) return null;
   const cleanDigits = String(app.client_phone || '').replace(/\D/g, '');
-  const waPhone = cleanDigits.startsWith('55') ? cleanDigits : `55${cleanDigits}`;
+  const waPhone = cleanDigits ? (cleanDigits.startsWith('55') ? cleanDigits : `55${cleanDigits}`) : '';
+  const dateBR = formatDateBR(app.appointment_date);
+  const totalPriceFormatted = formatCurrencyBR(app.total_price);
+  const servicesSummary = (app.items || []).map((i) => i.service_name).join(', ');
+  const clientPhoneFormatted = formatPhoneBR(app.client_phone);
+
+  let clientWhatsappUrl = '';
+  if (waPhone) {
+    const templates = getMessageTemplatesSync();
+    const msgText = renderMessageTemplate(templates.mensagem_cliente, {
+      cliente: app.client_name,
+      telefone: clientPhoneFormatted,
+      servicos: servicesSummary,
+      data: dateBR,
+      horario: `${app.start_time} às ${app.end_time}`,
+      valor: totalPriceFormatted
+    });
+    clientWhatsappUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msgText)}`;
+  }
+
   return {
     ...app,
-    dateBR: formatDateBR(app.appointment_date),
+    dateBR,
     dayName: getDayNamePT(app.appointment_date),
-    client_phone_formatted: formatPhoneBR(app.client_phone),
-    total_price_formatted: formatCurrencyBR(app.total_price),
-    services_summary: (app.items || []).map((i) => i.service_name).join(', '),
+    client_phone_formatted: clientPhoneFormatted,
+    total_price_formatted: totalPriceFormatted,
+    services_summary: servicesSummary,
     management_url: `/agendamento/${app.management_token}`,
-    client_whatsapp_url: `https://wa.me/${waPhone}`,
+    client_whatsapp_url: clientWhatsappUrl,
     can_client_modify:
       app.status === 'confirmado' &&
       canClientModifyAppointment(app.appointment_date, app.start_time)

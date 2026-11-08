@@ -197,41 +197,14 @@
             <div>
               <h3 class="card-title">2. Agendamentos da Semana</h3>
               <p class="card-subtitle">
-                Gerencie horários, serviços, status de conclusão e pagamentos nos dias selecionados para trabalho.
+                Clique em um dia de trabalho para expandir os agendamentos ou no botão "+" para adicionar um novo agendamento.
               </p>
-            </div>
-            <div class="flex-gap">
-              <div class="flex-gap" style="background: var(--bg-black); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border-gray);">
-                <button type="button" id="view-mode-list" class="btn btn-sm btn-white">Lista</button>
-                <button type="button" id="view-mode-calendar" class="btn btn-sm btn-outline" style="border:none;">Calendário</button>
-              </div>
-              <button type="button" id="btn-new-manual-appointment" class="btn btn-sm btn-green">
-                + Novo Agendamento
-              </button>
-            </div>
-          </div>
-
-          <!-- Filtros rápidos da Agenda -->
-          <div class="flex-between" style="margin-bottom: 14px;">
-            <div class="flex-gap">
-              <select id="agenda-filter-day" class="form-control" style="width: auto; padding: 7px 10px;">
-                <option value="">Todos os dias de trabalho</option>
-              </select>
-              <select id="agenda-filter-status" class="form-control" style="width: auto; padding: 7px 10px;">
-                <option value="">Todos os status</option>
-                <option value="confirmado">Confirmados</option>
-                <option value="concluido">Concluídos</option>
-                <option value="cancelado">Cancelados</option>
-              </select>
             </div>
             <div id="agenda-summary-counts" class="text-muted"></div>
           </div>
 
-          <!-- Visualização em Lista -->
+          <!-- Lista agrupada por seções de dias de trabalho -->
           <div id="appointments-list-view"></div>
-
-          <!-- Visualização em Calendário -->
-          <div id="appointments-calendar-view" class="hidden"></div>
         </div>
 
         <!-- Seção 6 — Lista de Espera -->
@@ -435,6 +408,99 @@
                   Histórico de Notificações
                 </button>
               </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- 2. Mensagens Automáticas -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Mensagens automáticas</h2>
+              <p class="card-subtitle">
+                Personalize o texto das mensagens que serão enviadas aos clientes e nas notificações automáticas.
+              </p>
+            </div>
+          </div>
+
+          <div class="alert" style="margin-bottom: 16px; font-size: 0.82rem;">
+            <strong>Variáveis disponíveis para usar no texto:</strong>
+            <code>{cliente}</code> (nome do cliente),
+            <code>{data}</code> (data do agendamento),
+            <code>{horario}</code> (horário de início e término),
+            <code>{servicos}</code> (serviços escolhidos),
+            <code>{valor}</code> (valor total),
+            <code>{telefone}</code> (WhatsApp do cliente).
+          </div>
+
+          <form id="settings-messages-form">
+            <div class="form-group">
+              <label class="form-label" for="tpl-mensagem-cliente">
+                1. Mensagem para enviar ao cliente no WhatsApp (Confirmação / Lembrete)
+              </label>
+              <textarea
+                id="tpl-mensagem-cliente"
+                class="form-control"
+                rows="3"
+                placeholder="Olá {cliente}! Passando para confirmar seu agendamento..."
+              ></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="tpl-novo-agendamento">
+                  2. Notificação automática: Novo agendamento
+                </label>
+                <textarea
+                  id="tpl-novo-agendamento"
+                  class="form-control"
+                  rows="5"
+                ></textarea>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="tpl-cancelamento-cliente">
+                  3. Notificação automática: Cancelamento pelo cliente
+                </label>
+                <textarea
+                  id="tpl-cancelamento-cliente"
+                  class="form-control"
+                  rows="5"
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="tpl-atendimento-concluido">
+                  4. Notificação automática: Atendimento concluído
+                </label>
+                <textarea
+                  id="tpl-atendimento-concluido"
+                  class="form-control"
+                  rows="4"
+                ></textarea>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="tpl-publicacao-agenda">
+                  5. Notificação automática: Publicação da agenda semanal
+                </label>
+                <textarea
+                  id="tpl-publicacao-agenda"
+                  class="form-control"
+                  rows="4"
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="flex-between" style="margin-top: 8px;">
+              <button type="button" id="btn-reset-messages" class="btn btn-outline btn-sm">
+                Restaurar Textos Padrão
+              </button>
+              <button type="submit" class="btn btn-green">
+                Salvar Mensagens Automáticas
+              </button>
             </div>
           </form>
         </div>
