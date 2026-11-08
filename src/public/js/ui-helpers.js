@@ -1,4 +1,24 @@
 const UI = {
+  initTheme() {
+    const saved = localStorage.getItem('luan_theme') || 'dark';
+    this.setTheme(saved);
+    return saved;
+  },
+
+  getTheme() {
+    return localStorage.getItem('luan_theme') || 'dark';
+  },
+
+  setTheme(theme) {
+    const normalized = theme === 'light' ? 'light' : 'dark';
+    localStorage.setItem('luan_theme', normalized);
+    if (normalized === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  },
+
   escapeHtml(str) {
     if (str === null || str === undefined) return '';
     return String(str)
@@ -223,3 +243,4 @@ const UI = {
 };
 
 window.UI = UI;
+UI.initTheme();

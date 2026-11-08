@@ -1,5 +1,5 @@
 const { getConfig } = require('../config');
-const { generateUUID } = require('../utils/auth');
+const { hashPassword, generateUUID } = require('../utils/auth');
 
 /**
  * Adaptador oficial para Supabase (PostgreSQL via PostgREST + RPC + Supabase Auth).
@@ -9,10 +9,37 @@ const { generateUUID } = require('../utils/auth');
 class SupabaseAdapter {
   constructor() {
     const config = getConfig();
-    this.url = config.supabase.url.replace(/\/$/, '');
+    // Aceita tanto https://xyz.supabase.co quanto https://xyz.supabase.co/rest/v1/
+    this.url = config.supabase.url
+      .trim()
+      .replace(/\/rest\/v1\/?$/i, '')
+      .replace(/\/$/, '');
     this.apiKey = config.supabase.serviceRoleKey || config.supabase.anonKey;
     this.anonKey = config.supabase.anonKey || this.apiKey;
     this._lockPromise = Promise.resolve();
+    this._seeded = false;
+  }
+
+  async _ensureSeeded() {
+    if (this._seeded) return;
+    this._seeded = true;
+    try {
+      const config = getConfig();
+      const admins = await this._rest('admins?select=id&limit=1');
+      if (!admins || admins.length === 0) {
+        await this._rest('admins', {
+          method: 'POST',
+          body: {
+            name: config.auth.adminDefaultName,
+            email: config.auth.adminDefaultEmail.toLowerCase(),
+            password_hash: hashPassword(config.auth.adminDefaultPassword)
+          }
+        });
+      }
+    } catch {
+      // Se a tabela ainda não foi criada ou sem permissão, não bloqueia o boot
+      this._seeded = false;
+    }
   }
 
   async _withLock(fn) {
@@ -63,6 +90,7 @@ class SupabaseAdapter {
   }
 
   async findAdminByEmail(email) {
+    await this._ensureSeeded();
     const rows = await this._rest(
       `admins?email=ilike.${encodeURIComponent(String(email || '').trim())}&limit=1`
     );
@@ -281,12 +309,11 @@ class SupabaseAdapter {
     items,
     isAdmin = false
   }) {
-    // Chama a função RPC atômica no PostgreSQL que aplica pg_advisory_xact_lock
     const rpcResult = await this._rest('rpc/book_appointment_atomic', {
       method: 'POST',
       body: {
         p_client_name: clientName,
-        p_client_phone: clientPhone,
+        p_client_phone: clientPhone || '',
         p_appointment_date: appointmentDate,
         p_start_time: startTime,
         p_end_time: endTime,
@@ -387,7 +414,7 @@ class SupabaseAdapter {
       body: {
         week_start: weekStart || null,
         name,
-        phone,
+        phone: phone || '',
         desired_services: desiredServices || [],
         preferred_days: preferredDays || [],
         preferred_periods: preferredPeriods || [],

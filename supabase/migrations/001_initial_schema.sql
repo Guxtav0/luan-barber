@@ -257,15 +257,22 @@ BEGIN
         RAISE EXCEPTION 'HORARIO_OCUPADO: Este horário acabou de ser ocupado por outro cliente. Por favor, escolha outro horário.';
     END IF;
 
-    -- 5. Localizar ou criar cliente pelo telefone
-    SELECT id INTO v_client_id
-    FROM public.clients
-    WHERE phone = p_client_phone
-    LIMIT 1;
+    -- 5. Localizar ou criar cliente (por telefone se informado, ou por nome quando sem telefone)
+    IF p_client_phone IS NOT NULL AND p_client_phone != '' THEN
+        SELECT id INTO v_client_id
+        FROM public.clients
+        WHERE phone = p_client_phone
+        LIMIT 1;
+    ELSE
+        SELECT id INTO v_client_id
+        FROM public.clients
+        WHERE lower(name) = lower(p_client_name) AND (phone = '' OR phone IS NULL)
+        LIMIT 1;
+    END IF;
 
     IF v_client_id IS NULL THEN
         INSERT INTO public.clients (name, phone)
-        VALUES (p_client_name, p_client_phone)
+        VALUES (p_client_name, COALESCE(p_client_phone, ''))
         RETURNING id INTO v_client_id;
     ELSE
         UPDATE public.clients

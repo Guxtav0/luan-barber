@@ -493,6 +493,29 @@ async function handleApiRequest(req, res) {
           notification: updated
         });
       }
+
+      // --- ABA 4: CONFIGURAÇÕES DO ADMINISTRADOR ---
+      if (pathname === '/api/admin/settings' && method === 'GET') {
+        return sendJson(res, 200, {
+          whatsapp: getWhatsAppIntegrationStatus()
+        });
+      }
+
+      if (pathname === '/api/admin/settings' && method === 'PUT') {
+        const body = await parseJsonBody(req);
+        if (body.luan_whatsapp_number !== undefined) {
+          const digits = String(body.luan_whatsapp_number || '').replace(/\D/g, '');
+          if (digits) {
+            process.env.LUAN_WHATSAPP_NUMBER = digits.startsWith('55') ? digits : `55${digits}`;
+          } else {
+            process.env.LUAN_WHATSAPP_NUMBER = '';
+          }
+        }
+        return sendJson(res, 200, {
+          message: 'Configurações salvas com sucesso!',
+          whatsapp: getWhatsAppIntegrationStatus()
+        });
+      }
     }
 
     return sendJson(res, 404, { error: 'Endpoint não encontrado.' });

@@ -54,32 +54,68 @@
 
   <!-- PAINEL PRINCIPAL AUTENTICADO -->
   <div id="admin-app-screen" class="hidden">
+    <!-- MENU LATERAL (DRAWER) PARA MOBILE -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+    <aside id="sidebar-drawer" class="sidebar-drawer" aria-label="Menu Lateral">
+      <div class="sidebar-drawer-header">
+        <div class="brand">
+          <div class="brand-mark">LB</div>
+          <div>
+            <span class="brand-title" style="font-size: 1rem;">Luan Barber</span>
+            <span class="brand-subtitle">Menu do Painel</span>
+          </div>
+        </div>
+        <button type="button" id="btn-close-sidebar" class="btn btn-sm btn-outline" style="padding: 4px 9px;">✕</button>
+      </div>
+
+      <nav class="sidebar-nav-list">
+        <button type="button" class="sidebar-nav-btn active" data-tab="agenda">
+          <span>Agenda</span>
+          <span>›</span>
+        </button>
+        <button type="button" class="sidebar-nav-btn" data-tab="financeiro">
+          <span>Financeiro</span>
+          <span>›</span>
+        </button>
+        <button type="button" class="sidebar-nav-btn" data-tab="precos">
+          <span>Preços</span>
+          <span>›</span>
+        </button>
+        <button type="button" class="sidebar-nav-btn" data-tab="configuracoes">
+          <span>Configurações</span>
+          <span>›</span>
+        </button>
+      </nav>
+
+      <div style="padding-top: 14px; border-top: 1px solid var(--border-gray);">
+        <a href="/" target="_blank" class="btn btn-outline btn-block btn-sm">
+          Ver Página Pública ↗
+        </a>
+      </div>
+    </aside>
+
+    <!-- CABEÇALHO SUPERIOR LIMPO: APENAS LOGO, TÍTULO E SUBTÍTULO (E BOTÃO DO MENU NO MOBILE) -->
     <header class="app-header">
       <div class="app-header-inner">
         <div class="brand">
+          <button type="button" id="btn-open-sidebar" class="mobile-menu-btn" aria-label="Abrir menu">
+            ☰
+          </button>
           <div class="brand-mark">LB</div>
           <div>
             <span class="brand-title">Luan Barber</span>
             <span class="brand-subtitle">Gestão e Administração</span>
           </div>
         </div>
-
-        <div class="flex-gap">
-          <button type="button" id="btn-open-notifications" class="btn btn-sm btn-outline" title="Status e Histórico de Notificações WhatsApp">
-            <span>WhatsApp:</span>
-            <span id="wa-status-indicator" class="badge">Verificando...</span>
-          </button>
-          <a href="/" target="_blank" class="btn btn-sm btn-outline">Ver Página Pública ↗</a>
-          <button type="button" id="btn-logout" class="btn btn-sm btn-red">Sair</button>
-        </div>
       </div>
 
-      <!-- 3 ABAS PRINCIPAIS: AGENDA | FINANCEIRO | PREÇOS -->
+      <!-- ABAS HORIZONTAIS (VISÍVEIS NO DESKTOP, OCULTAS NO MOBILE) -->
       <nav class="admin-tabs" aria-label="Navegação Principal">
         <div class="admin-tabs-inner">
           <button type="button" class="admin-tab-btn active" data-tab="agenda">Agenda</button>
           <button type="button" class="admin-tab-btn" data-tab="financeiro">Financeiro</button>
           <button type="button" class="admin-tab-btn" data-tab="precos">Preços</button>
+          <button type="button" class="admin-tab-btn" data-tab="configuracoes">Configurações</button>
         </div>
       </nav>
     </header>
@@ -120,15 +156,21 @@
 
         <!-- 3.1 Gerenciamento da Disponibilidade Semanal -->
         <div class="card">
-          <div class="card-header">
-            <div>
+          <div class="card-header" id="schedule-editor-header" style="cursor: pointer; user-select: none;">
+            <div style="flex: 1;">
               <h3 class="card-title">1. Configurar Disponibilidade da Semana</h3>
               <p class="card-subtitle">
                 Defina os dias de trabalho, expediente e intervalos. Os horários só ficam visíveis aos clientes após clicar em "Publicar agenda".
               </p>
             </div>
-            <button type="button" id="btn-toggle-schedule-editor" class="btn btn-sm btn-outline">
-              Ocultar / Expandir Expediente
+            <button
+              type="button"
+              id="btn-toggle-schedule-editor"
+              class="chevron-toggle-btn open"
+              aria-label="Expandir ou recolher expediente"
+              title="Expandir / Recolher"
+            >
+              <span class="chevron-icon">&gt;</span>
             </button>
           </div>
 
@@ -155,7 +197,7 @@
             <div>
               <h3 class="card-title">2. Agendamentos da Semana</h3>
               <p class="card-subtitle">
-                Gerencie horários, serviços, status de conclusão e pagamentos em calendário ou lista.
+                Gerencie horários, serviços, status de conclusão e pagamentos nos dias selecionados para trabalho.
               </p>
             </div>
             <div class="flex-gap">
@@ -173,7 +215,7 @@
           <div class="flex-between" style="margin-bottom: 14px;">
             <div class="flex-gap">
               <select id="agenda-filter-day" class="form-control" style="width: auto; padding: 7px 10px;">
-                <option value="">Todos os dias da semana</option>
+                <option value="">Todos os dias de trabalho</option>
               </select>
               <select id="agenda-filter-status" class="form-control" style="width: auto; padding: 7px 10px;">
                 <option value="">Todos os status</option>
@@ -355,6 +397,88 @@
           </div>
 
           <div id="admin-services-list"></div>
+        </div>
+      </section>
+
+      <!-- ================================================================== -->
+      <!-- ABA 4 — CONFIGURAÇÕES                                              -->
+      <!-- ================================================================== -->
+      <section id="tab-configuracoes" class="admin-tab-panel hidden">
+        <!-- 1. Número de WhatsApp do Admin -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">WhatsApp da Barbearia</h2>
+              <p class="card-subtitle">
+                Defina o número de WhatsApp que você utiliza para enviar mensagens aos clientes e receber notificações do sistema.
+              </p>
+            </div>
+            <span id="wa-status-indicator" class="badge">Verificando...</span>
+          </div>
+
+          <form id="settings-whatsapp-form">
+            <div class="form-row" style="align-items: end;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="settings-wa-number">Número de WhatsApp com DDD</label>
+                <input
+                  type="tel"
+                  id="settings-wa-number"
+                  class="form-control"
+                  placeholder="(11) 99999-9999"
+                />
+              </div>
+              <div class="flex-gap">
+                <button type="submit" class="btn btn-green">
+                  Salvar Número de WhatsApp
+                </button>
+                <button type="button" id="btn-open-notifications" class="btn btn-outline">
+                  Histórico de Notificações
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- 2. Tema da Interface (Claro / Escuro) -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Aparência e Tema</h2>
+              <p class="card-subtitle">
+                Escolha entre o modo escuro (preto) ou o modo claro (branco).
+              </p>
+            </div>
+          </div>
+
+          <div class="flex-gap">
+            <button type="button" id="btn-theme-dark" class="btn btn-white">
+              Tema Escuro (Padrão)
+            </button>
+            <button type="button" id="btn-theme-light" class="btn btn-outline">
+              Tema Claro
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Conta e Sessão -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Conta e Acesso</h2>
+              <p class="card-subtitle" id="settings-admin-email-label">
+                Administrador conectado
+              </p>
+            </div>
+          </div>
+
+          <div class="flex-between">
+            <a href="/" target="_blank" class="btn btn-outline">
+              Abrir Página Pública de Agendamento ↗
+            </a>
+            <button type="button" id="btn-logout" class="btn btn-red">
+              Sair da Conta
+            </button>
+          </div>
         </div>
       </section>
     </main>

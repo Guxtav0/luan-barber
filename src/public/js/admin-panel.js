@@ -47,19 +47,79 @@
     document.getElementById('admin-login-screen').classList.add('hidden');
     document.getElementById('admin-app-screen').classList.remove('hidden');
     updateWhatsAppHeaderBadge();
+    syncSettingsTabUI();
   }
 
   function updateWhatsAppHeaderBadge() {
     const badge = document.getElementById('wa-status-indicator');
     if (!badge || !state.integrations) return;
     const wa = state.integrations.whatsapp;
-    if (wa.configured) {
+    if (wa && wa.configured) {
       badge.className = 'badge badge-green';
       badge.textContent = 'Ativo';
     } else {
       badge.className = 'badge badge-yellow';
-      badge.textContent = 'Pendente (.env)';
+      badge.textContent = 'Não configurado';
     }
+  }
+
+  function updateThemeButtonsUI() {
+    const currentTheme = UI.getTheme();
+    const darkBtn = document.getElementById('btn-theme-dark');
+    const lightBtn = document.getElementById('btn-theme-light');
+    if (darkBtn && lightBtn) {
+      darkBtn.className = currentTheme === 'dark' ? 'btn btn-white' : 'btn btn-outline';
+      lightBtn.className = currentTheme === 'light' ? 'btn btn-white' : 'btn btn-outline';
+    }
+  }
+
+  function syncSettingsTabUI() {
+    updateWhatsAppHeaderBadge();
+    updateThemeButtonsUI();
+
+    const emailLabel = document.getElementById('settings-admin-email-label');
+    if (emailLabel && state.admin) {
+      emailLabel.textContent = `Conectado como ${state.admin.name || 'Luan'} (${state.admin.email})`;
+    }
+
+    const waInput = document.getElementById('settings-wa-number');
+    if (waInput && state.integrations && state.integrations.whatsapp) {
+      const raw = state.integrations.whatsapp.number || '';
+      // Se começa com 55 e tem 12 ou 13 dígitos, remove o DDI 55 para exibir com máscara local
+      const localDigits = raw.startsWith('55') && raw.length >= 12 ? raw.slice(2) : raw;
+      waInput.value = localDigits ? UI.formatPhoneDisplay(localDigits) : '';
+    }
+  }
+
+  async function loadSettingsTab() {
+    try {
+      const data = await ApiClient.get('/api/admin/settings');
+      if (data && data.whatsapp) {
+        if (!state.integrations) state.integrations = {};
+        state.integrations.whatsapp = data.whatsapp;
+      }
+      syncSettingsTabUI();
+    } catch {
+      syncSettingsTabUI();
+    }
+  }
+
+  function openMobileSidebar() {
+    document.getElementById('sidebar-backdrop')?.classList.add('open');
+    document.getElementById('sidebar-drawer')?.classList.add('open');
+  }
+
+  function closeMobileSidebar() {
+    document.getElementById('sidebar-backdrop')?.classList.remove('open');
+    document.getElementById('sidebar-drawer')?.classList.remove('open');
+  }
+
+  function toggleScheduleEditor() {
+    const body = document.getElementById('schedule-editor-body');
+    const btn = document.getElementById('btn-toggle-schedule-editor');
+    if (!body || !btn) return;
+    const isHidden = body.classList.toggle('hidden');
+    btn.classList.toggle('open', !isHidden);
   }
 
   async function loadAllInitialData() {
@@ -71,6 +131,9 @@
 
   // ==================== EVENTOS GERAIS ====================
   function bindStaticEvents() {
+    const waInput = document.getElementById('settings-wa-number');
+    if (waInput) UI.attachPhoneMask(waInput);
+
     // Login
     const loginForm = document.getElementById('login-form');
     loginForm.addEventListener('submit', async (e) => {
@@ -100,6 +163,7 @@
 
     // Logout
     document.getElementById('btn-logout').addEventListener('click', async () => {
+      closeMobileSidebar();
       await ApiClient.post('/api/auth/logout', {}).catch(() => {});
       ApiClient.setToken('');
       state.admin = null;
@@ -107,12 +171,50 @@
       UI.toast('Sessão encerrada.', 'info');
     });
 
-    // Navegação entre abas
-    document.querySelectorAll('.admin-tab-btn').forEach((btn) => {
+    // Menu Lateral Mobile (Drawer)
+    document.getElementById('btn-open-sidebar')?.addEventListener('click', openMobileSidebar);
+    document.getElementById('btn-close-sidebar')?.addEventListener('click', closeMobileSidebar);
+    document.getElementById('sidebar-backdrop')?.addEventListener('click', closeMobileSidebar);
+
+    // Navegação entre abas (Desktop e Menu Lateral Mobile)
+    document.querySelectorAll('.admin-tab-btn, .sidebar-nav-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const tab = btn.getAttribute('data-tab');
+        closeMobileSidebar();
         switchTab(tab);
       });
+    });
+
+    // Aba 4: Configurações (WhatsApp e Tema)
+    const waSettingsForm = document.getElementById('settings-whatsapp-form');
+    if (waSettingsForm) {
+      waSettingsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const numberVal = document.getElementById('settings-wa-number').value.trim();
+        try {
+          const res = await ApiClient.put('/api/admin/settings', {
+            luan_whatsapp_number: numberVal
+          });
+          if (!state.integrations) state.integrations = {};
+          state.integrations.whatsapp = res.whatsapp;
+          syncSettingsTabUI();
+          UI.toast(res.message || 'Número de WhatsApp salvo com sucesso!', 'success');
+        } catch (err) {
+          UI.toast(err.message || 'Erro ao salvar número de WhatsApp.', 'error');
+        }
+      });
+    }
+
+    document.getElementById('btn-theme-dark')?.addEventListener('click', () => {
+      UI.setTheme('dark');
+      updateThemeButtonsUI();
+      UI.toast('Tema escuro ativado.', 'info');
+    });
+
+    document.getElementById('btn-theme-light')?.addEventListener('click', () => {
+      UI.setTheme('light');
+      updateThemeButtonsUI();
+      UI.toast('Tema claro ativado.', 'info');
     });
 
     // Botão de Notificações WhatsApp
@@ -138,11 +240,21 @@
       }
     });
 
-    // Expandir / ocultar editor de expediente
-    document.getElementById('btn-toggle-schedule-editor').addEventListener('click', () => {
-      const body = document.getElementById('schedule-editor-body');
-      body.classList.toggle('hidden');
-    });
+    // Expandir / ocultar editor de expediente com ícone ">" animado
+    const schedHeader = document.getElementById('schedule-editor-header');
+    const schedToggleBtn = document.getElementById('btn-toggle-schedule-editor');
+    if (schedHeader) {
+      schedHeader.addEventListener('click', (e) => {
+        if (schedToggleBtn && schedToggleBtn.contains(e.target)) return;
+        toggleScheduleEditor();
+      });
+    }
+    if (schedToggleBtn) {
+      schedToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleScheduleEditor();
+      });
+    }
 
     // Salvar rascunho e Publicar agenda
     document.getElementById('btn-save-draft').addEventListener('click', () => {
@@ -227,7 +339,7 @@
 
   function switchTab(tabName) {
     state.activeTab = tabName;
-    document.querySelectorAll('.admin-tab-btn').forEach((btn) => {
+    document.querySelectorAll('.admin-tab-btn, .sidebar-nav-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
     });
     document.querySelectorAll('.admin-tab-panel').forEach((panel) => {
@@ -240,6 +352,8 @@
       loadFinanceDashboard();
     } else if (tabName === 'precos') {
       loadAdminServices();
+    } else if (tabName === 'configuracoes') {
+      loadSettingsTab();
     }
   }
 
@@ -454,6 +568,8 @@
       });
       state.schedule = res.schedule;
       renderScheduleHeaderAndEditor();
+      populateAgendaDayFilter();
+      renderAppointmentsSection();
       UI.toast(res.message, 'success');
     } catch (err) {
       if (err.code === 'CONFLITO_EXPEDIENTE' && Array.isArray(err.conflicts)) {
@@ -515,13 +631,33 @@
     }
   }
 
+  function getVisibleAgendaDays() {
+    if (!state.schedule || !Array.isArray(state.schedule.days)) return [];
+    if (state.schedule.status === 'publicada') {
+      return state.schedule.days.filter((d) => d.is_working);
+    }
+    return state.schedule.days;
+  }
+
   function populateAgendaDayFilter() {
     const sel = document.getElementById('agenda-filter-day');
     if (!state.schedule) return;
+    const visibleDays = getVisibleAgendaDays();
+    if (
+      state.agendaFilterDay &&
+      !visibleDays.some((d) => d.work_date === state.agendaFilterDay)
+    ) {
+      state.agendaFilterDay = '';
+    }
     const currentVal = state.agendaFilterDay;
+    const defaultLabel =
+      state.schedule.status === 'publicada'
+        ? 'Todos os dias de trabalho'
+        : 'Todos os dias da semana';
+
     sel.innerHTML =
-      `<option value="">Todos os dias da semana</option>` +
-      state.schedule.days
+      `<option value="">${defaultLabel}</option>` +
+      visibleDays
         .map(
           (d) =>
             `<option value="${d.work_date}" ${d.work_date === currentVal ? 'selected' : ''}>${UI.escapeHtml(d.dayName)} (${UI.escapeHtml(d.dateBR)})</option>`
@@ -530,7 +666,11 @@
   }
 
   function getFilteredAppointments() {
+    const visibleDates = new Set(getVisibleAgendaDays().map((d) => d.work_date));
     return (state.appointments || []).filter((a) => {
+      if (state.schedule?.status === 'publicada' && !visibleDates.has(a.appointment_date)) {
+        return false;
+      }
       if (state.agendaFilterDay && a.appointment_date !== state.agendaFilterDay) return false;
       if (state.agendaFilterStatus && a.status !== state.agendaFilterStatus) return false;
       return true;
@@ -678,7 +818,20 @@
     const container = document.getElementById('appointments-calendar-view');
     if (!state.schedule) return;
 
-    const colsHtml = state.schedule.days
+    const visibleDays = getVisibleAgendaDays().filter(
+      (d) => !state.agendaFilterDay || d.work_date === state.agendaFilterDay
+    );
+
+    if (!visibleDays.length) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 32px 16px; color: var(--text-gray);">
+          Nenhum dia de trabalho selecionado para exibição.
+        </div>
+      `;
+      return;
+    }
+
+    const colsHtml = visibleDays
       .map((day) => {
         const dayApps = (state.appointments || []).filter(
           (a) =>
@@ -721,7 +874,8 @@
       })
       .join('');
 
-    container.innerHTML = `<div class="calendar-grid-wrapper">${colsHtml}</div>`;
+    const colCount = Math.max(visibleDays.length, 1);
+    container.innerHTML = `<div class="calendar-grid-wrapper" style="grid-template-columns: repeat(${colCount}, minmax(175px, 1fr));">${colsHtml}</div>`;
 
     container.querySelectorAll('.calendar-slot-card').forEach((card) => {
       card.addEventListener('click', () => {
