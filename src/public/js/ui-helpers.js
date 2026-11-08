@@ -189,6 +189,7 @@ const UI = {
   },
 
   toast(message, type = 'info') {
+    if (type !== 'error') return;
     let container = document.getElementById('toast-container');
     if (!container) {
       container = document.createElement('div');

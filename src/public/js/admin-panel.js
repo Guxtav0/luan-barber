@@ -713,13 +713,21 @@
           ? dayApps
               .map(
                 (app) => `
-              <div class="flex-between" style="padding: 10px 12px; background: var(--bg-black); border: 1px solid var(--border-gray); border-radius: var(--radius-sm); margin-top: 8px;">
-                <div class="flex-gap">
-                  <span class="badge" style="font-size: 0.85rem; font-weight: 700; color: var(--text-white);">${UI.escapeHtml(app.start_time)}</span>
-                  <strong style="font-size: 0.98rem; color: var(--text-white);">${UI.escapeHtml(app.client_name)}</strong>
+              <div class="compact-client-card">
+                <div class="compact-client-top">
+                  <span class="compact-client-name">${UI.escapeHtml(app.client_name)}</span>
+                  <span class="compact-client-time">${UI.escapeHtml(app.start_time)}</span>
                 </div>
 
-                <div class="flex-gap">
+                <div class="compact-client-actions">
+                  <button
+                    type="button"
+                    class="btn btn-sm ${app.status === 'concluido' ? 'btn-green' : 'btn-outline'} btn-quick-complete"
+                    data-id="${app.id}"
+                    data-next-status="${app.status === 'concluido' ? 'confirmado' : 'concluido'}"
+                  >
+                    ${app.status === 'concluido' ? '✓ Realizado' : 'Realizado'}
+                  </button>
                   <button
                     type="button"
                     class="btn btn-sm ${app.payment_status === 'pago' ? 'btn-green' : 'btn-yellow'} btn-quick-payment"
@@ -748,7 +756,7 @@
 
         return `
           <div class="schedule-day-row working" style="margin-bottom: 12px;">
-            <div class="flex-between day-section-header" data-date="${day.work_date}" style="cursor: pointer; user-select: none;">
+            <div class="collapsible-header day-section-header" data-date="${day.work_date}">
               <div>
                 <div class="flex-gap">
                   <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-white); margin: 0;">
@@ -758,19 +766,22 @@
                 </div>
                 <div style="margin-top: 6px; font-size: 0.84rem; color: var(--text-gray); display: flex; flex-direction: column; gap: 2px;">
                   <span>Confirmados: <strong style="color: var(--text-white);">${confirmedCount}</strong></span>
-                  <span>Disponíveis: <strong style="color: var(--green-text);">${availableCount}</strong></span>
+                  <span>Disponíveis: <strong style="color: var(--text-white);">${availableCount}</strong></span>
                 </div>
               </div>
 
-              <div class="flex-gap">
+              <div class="collapsible-header-actions">
                 <button
                   type="button"
-                  class="btn btn-sm btn-green btn-add-day-appointment"
+                  class="btn btn-green day-add-btn btn-add-day-appointment"
                   data-date="${day.work_date}"
                   title="Novo agendamento em ${UI.escapeHtml(day.dayName)}"
-                  style="font-size: 1.1rem; font-weight: 800; padding: 6px 12px; line-height: 1;"
+                  aria-label="Novo agendamento em ${UI.escapeHtml(day.dayName)}"
                 >
-                  +
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; display: block;">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
                 </button>
                 <button
                   type="button"
@@ -778,7 +789,9 @@
                   data-date="${day.work_date}"
                   aria-label="Expandir ou recolher agendamentos do dia"
                 >
-                  <span class="chevron-icon">&gt;</span>
+                  <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 6 15 12 9 18"></polyline>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -792,12 +805,17 @@
       .join('');
 
     const toggleDaySection = (dateStr) => {
-      if (state.openDaySections.has(dateStr)) {
-        state.openDaySections.delete(dateStr);
-      } else {
+      const willOpen = !state.openDaySections.has(dateStr);
+      if (willOpen) {
         state.openDaySections.add(dateStr);
+      } else {
+        state.openDaySections.delete(dateStr);
       }
-      renderAppointmentsSection();
+
+      const btn = container.querySelector(`.btn-toggle-day-section[data-date="${dateStr}"]`);
+      const body = container.querySelector(`.day-section-body[data-date="${dateStr}"]`);
+      if (btn) btn.classList.toggle('open', willOpen);
+      if (body) body.classList.toggle('hidden', !willOpen);
     };
 
     container.querySelectorAll('.day-section-header').forEach((hdr) => {
@@ -825,6 +843,14 @@
         const dateStr = btn.getAttribute('data-date');
         state.openDaySections.add(dateStr);
         openAppointmentModal(null, null, dateStr);
+      });
+    });
+
+    container.querySelectorAll('.btn-quick-complete').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        const nextStatus = btn.getAttribute('data-next-status');
+        await quickUpdateAppointment(id, { status: nextStatus });
       });
     });
 
@@ -1613,63 +1639,59 @@
     container.innerHTML = state.services
       .map(
         (svc, idx) => `
-        <div class="schedule-day-row" style="margin-bottom: 10px;">
-          <div class="flex-between">
-            <div class="flex-gap">
-              <div style="display: flex; flex-direction: column; gap: 4px;">
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline btn-move-service-up"
-                  data-idx="${idx}"
-                  ${idx === 0 ? 'disabled' : ''}
-                  title="Mover serviço para cima"
-                  style="padding: 3px 8px; line-height: 1;"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline btn-move-service-down"
-                  data-idx="${idx}"
-                  ${idx === state.services.length - 1 ? 'disabled' : ''}
-                  title="Mover serviço para baixo"
-                  style="padding: 3px 8px; line-height: 1;"
-                >
-                  ↓
-                </button>
+        <div
+          class="schedule-day-row service-sortable-row"
+          draggable="true"
+          data-service-id="${svc.id}"
+          data-idx="${idx}"
+          style="margin-bottom: 10px;"
+        >
+          <div class="service-card-top">
+            <div class="service-card-info">
+              <div class="service-card-header">
+                <span class="badge">${idx + 1}º</span>
+                <strong class="service-card-title">${UI.escapeHtml(svc.name)}</strong>
+                <span class="badge ${svc.active ? 'badge-green' : 'badge-red'}">
+                  ${svc.active ? 'Ativo' : 'Inativo'}
+                </span>
               </div>
-
-              <div>
-                <div class="flex-gap">
-                  <span class="badge">${idx + 1}º</span>
-                  <strong style="font-size: 1.05rem;">${UI.escapeHtml(svc.name)}</strong>
-                  <span class="badge ${svc.active ? 'badge-green' : 'badge-red'}">
-                    ${svc.active ? 'Ativo' : 'Inativo'}
-                  </span>
-                  <span class="badge">Duração fixa: 30 min</span>
-                </div>
-                ${
-                  svc.description
-                    ? `<div class="text-muted" style="margin-top: 4px;">${UI.escapeHtml(svc.description)}</div>`
-                    : ''
-                }
-                <div style="font-size: 1.15rem; font-weight: 800; margin-top: 6px; color: var(--text-white);">
-                  ${UI.escapeHtml(svc.price_formatted)}
-                </div>
+              ${
+                svc.description
+                  ? `<div class="text-muted" style="font-size: 0.86rem;">${UI.escapeHtml(svc.description)}</div>`
+                  : ''
+              }
+              <div class="service-card-meta">
+                <span class="service-card-price">${UI.escapeHtml(svc.price_formatted)}</span>
+                <span class="badge">30 min</span>
               </div>
             </div>
 
-            <div class="flex-gap">
-              <button type="button" class="btn btn-sm btn-outline btn-toggle-service" data-id="${svc.id}" data-active="${svc.active}">
-                ${svc.active ? 'Desativar' : 'Ativar'}
-              </button>
-              <button type="button" class="btn btn-sm btn-outline btn-edit-service" data-id="${svc.id}">
-                Editar
-              </button>
-              <button type="button" class="btn btn-sm btn-red btn-delete-service" data-id="${svc.id}">
-                Excluir
-              </button>
+            <div
+              class="service-drag-handle"
+              title="Clique e arraste para reordenar"
+              aria-label="Clique e arraste para reordenar"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.8"></circle>
+                <circle cx="15" cy="5" r="1.8"></circle>
+                <circle cx="9" cy="12" r="1.8"></circle>
+                <circle cx="15" cy="12" r="1.8"></circle>
+                <circle cx="9" cy="19" r="1.8"></circle>
+                <circle cx="15" cy="19" r="1.8"></circle>
+              </svg>
             </div>
+          </div>
+
+          <div class="service-card-actions">
+            <button type="button" class="btn btn-sm btn-outline btn-toggle-service" data-id="${svc.id}" data-active="${svc.active}">
+              ${svc.active ? 'Desativar' : 'Ativar'}
+            </button>
+            <button type="button" class="btn btn-sm btn-outline btn-edit-service" data-id="${svc.id}">
+              Editar
+            </button>
+            <button type="button" class="btn btn-sm btn-red btn-delete-service" data-id="${svc.id}">
+              Excluir
+            </button>
           </div>
         </div>
       `
@@ -1677,7 +1699,7 @@
       .join('');
 
     const moveService = async (fromIdx, toIdx) => {
-      if (toIdx < 0 || toIdx >= state.services.length) return;
+      if (fromIdx === toIdx || toIdx < 0 || toIdx >= state.services.length) return;
       const reordered = [...state.services];
       const [moved] = reordered.splice(fromIdx, 1);
       reordered.splice(toIdx, 0, moved);
@@ -1699,18 +1721,104 @@
       }
     };
 
-    container.querySelectorAll('.btn-move-service-up').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.getAttribute('data-idx'));
-        moveService(idx, idx - 1);
-      });
-    });
+    let draggedIdx = null;
+    const rows = Array.from(container.querySelectorAll('.service-sortable-row'));
 
-    container.querySelectorAll('.btn-move-service-down').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.getAttribute('data-idx'));
-        moveService(idx, idx + 1);
+    rows.forEach((row) => {
+      row.addEventListener('dragstart', (e) => {
+        if (e.target.closest('button')) {
+          e.preventDefault();
+          return;
+        }
+        draggedIdx = Number(row.getAttribute('data-idx'));
+        row.classList.add('dragging');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(draggedIdx));
+        }
       });
+
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        const overIdx = Number(row.getAttribute('data-idx'));
+        rows.forEach((r) => r.classList.remove('drag-over'));
+        if (draggedIdx !== null && overIdx !== draggedIdx) {
+          row.classList.add('drag-over');
+        }
+      });
+
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('drag-over');
+      });
+
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        rows.forEach((r) => r.classList.remove('drag-over', 'dragging'));
+        const toIdx = Number(row.getAttribute('data-idx'));
+        const fromIdx =
+          draggedIdx !== null
+            ? draggedIdx
+            : Number(e.dataTransfer?.getData('text/plain'));
+        draggedIdx = null;
+        if (!Number.isNaN(fromIdx) && !Number.isNaN(toIdx) && fromIdx !== toIdx) {
+          moveService(fromIdx, toIdx);
+        }
+      });
+
+      row.addEventListener('dragend', () => {
+        draggedIdx = null;
+        rows.forEach((r) => r.classList.remove('drag-over', 'dragging'));
+      });
+
+      const handle = row.querySelector('.service-drag-handle');
+      if (handle) {
+        let touchFromIdx = null;
+        let touchTargetIdx = null;
+
+        handle.addEventListener(
+          'touchstart',
+          () => {
+            touchFromIdx = Number(row.getAttribute('data-idx'));
+            touchTargetIdx = touchFromIdx;
+            row.classList.add('dragging');
+          },
+          { passive: true }
+        );
+
+        handle.addEventListener(
+          'touchmove',
+          (e) => {
+            if (touchFromIdx === null) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            const overRow = el ? el.closest('.service-sortable-row') : null;
+            rows.forEach((r) => r.classList.remove('drag-over'));
+            if (overRow) {
+              const idx = Number(overRow.getAttribute('data-idx'));
+              touchTargetIdx = idx;
+              if (idx !== touchFromIdx) {
+                overRow.classList.add('drag-over');
+              }
+            }
+          },
+          { passive: false }
+        );
+
+        handle.addEventListener('touchend', () => {
+          rows.forEach((r) => r.classList.remove('drag-over', 'dragging'));
+          if (
+            touchFromIdx !== null &&
+            touchTargetIdx !== null &&
+            touchFromIdx !== touchTargetIdx
+          ) {
+            moveService(touchFromIdx, touchTargetIdx);
+          }
+          touchFromIdx = null;
+          touchTargetIdx = null;
+        });
+      }
     });
 
     container.querySelectorAll('.btn-toggle-service').forEach((btn) => {

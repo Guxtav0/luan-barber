@@ -982,10 +982,30 @@ button, input, select, textarea {
   }
 }
 
-/* Botão ">" animado para expandir / recolher seção */
+/* Cabeçalho de seção expansível padronizado e centralizado */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsible-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Botão ">" animado e centralizado para expandir / recolher seção */
 .chevron-toggle-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border-radius: var(--radius-md);
   background-color: var(--bg-surface);
   border: 1px solid var(--border-strong);
@@ -994,7 +1014,7 @@ button, input, select, textarea {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   flex-shrink: 0;
 }
 
@@ -1004,14 +1024,176 @@ button, input, select, textarea {
 }
 
 .chevron-icon {
-  display: inline-block;
-  font-size: 1.05rem;
-  font-weight: 800;
-  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: block;
   transform: rotate(0deg);
-  transition: transform 0.25s ease;
+  transform-origin: center center;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 
 .chevron-toggle-btn.open .chevron-icon {
   transform: rotate(90deg);
+}
+
+.day-add-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Card compacto de agendamento dentro da seção do dia */
+.compact-client-card {
+  padding: 12px 14px;
+  background-color: var(--bg-black);
+  border: 1px solid var(--border-gray);
+  border-radius: var(--radius-md);
+  margin-top: 8px;
+}
+
+.compact-client-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.compact-client-time {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--text-white);
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.compact-client-name {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-white);
+  text-align: left;
+  word-break: break-word;
+  min-width: 0;
+  flex: 1;
+}
+
+.compact-client-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-gray);
+}
+
+/* Cards de Serviços com Clique e Arraste (Drag & Drop) */
+.service-sortable-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.service-sortable-row.dragging {
+  opacity: 0.55;
+  border-color: var(--text-white);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.service-sortable-row.drag-over {
+  border-color: var(--green-action);
+  transform: scale(1.01);
+}
+
+.service-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.service-card-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.service-card-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.service-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-white);
+  word-break: break-word;
+}
+
+.service-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.service-card-price {
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: var(--text-white);
+}
+
+.service-card-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-gray);
+  width: 100%;
+}
+
+.service-drag-handle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-gray);
+  background-color: var(--bg-black);
+  color: var(--text-gray);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  flex-shrink: 0;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.service-drag-handle svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.service-drag-handle:hover {
+  color: var(--text-white);
+  border-color: var(--border-strong);
+  background-color: var(--bg-elevated);
+}
+
+.service-drag-handle:active {
+  cursor: grabbing;
 }
