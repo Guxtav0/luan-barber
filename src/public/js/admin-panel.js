@@ -1496,15 +1496,17 @@
       pendingContainer.innerHTML = pendingList
         .map(
           (app) => `
-          <div class="schedule-day-row" style="margin-bottom: 8px;">
-            <div class="flex-between">
-              <div>
-                <strong>${UI.escapeHtml(app.client_name)}</strong>
-                <span class="text-muted" style="margin-left: 6px;">${UI.escapeHtml(app.client_phone_formatted)}</span>
+          <div class="schedule-day-row pending-payment-row">
+            <div class="pending-payment-content">
+              <div class="pending-payment-info">
+                <div>
+                  <strong>${UI.escapeHtml(app.client_name)}</strong>
+                  <span class="text-muted" style="margin-left: 6px;">${UI.escapeHtml(app.client_phone_formatted)}</span>
+                </div>
                 <div class="text-muted" style="font-size: 0.82rem; margin-top: 2px;">
                   Data: ${UI.escapeHtml(app.dateBR)} • Serviços: ${UI.escapeHtml(app.services_summary)}
                 </div>
-                <div style="color: var(--yellow-text); font-weight: 700; margin-top: 4px;">
+                <div class="pending-payment-value">
                   Valor pendente: ${UI.escapeHtml(app.total_price_formatted)}
                 </div>
               </div>

@@ -655,6 +655,34 @@ button, input, select, textarea {
   margin-top: 4px;
 }
 
+/* Pagamentos Pendentes (Área Financeira) */
+.pending-payment-row {
+  margin-bottom: 8px;
+}
+
+.pending-payment-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pending-payment-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.pending-payment-value {
+  color: var(--yellow-text);
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.pending-payment-content .btn-mark-paid-finance {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* Data Tables & Lists */
 .table-responsive {
   width: 100%;
@@ -979,6 +1007,22 @@ button, input, select, textarea {
   }
   .mobile-menu-btn {
     display: inline-flex;
+  }
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  .pending-payment-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .pending-payment-content .btn-mark-paid-finance {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 0.88rem;
   }
 }
 
